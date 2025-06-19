@@ -16,61 +16,45 @@ A comprehensive authentication SDK for React applications, providing wallet conn
 ## 📦 Installation
 
 ```bash
-npm install @pr0d/sdk
+npm install pr0d-sdk
 ```
 
-### Peer Dependencies
 
-Make sure you have these peer dependencies installed:
-
-```bash
-npm install react react-dom @rainbow-me/rainbowkit @tanstack/react-query viem wagmi
-```
 
 ## 🏗️ Quick Start
 
 ### 1. Wrap your app with providers
 
 ```jsx
-import React from 'react';
-import { Pr0d } from '@pr0d/sdk';
-import { WagmiProvider } from 'wagmi';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
-import { config } from './wagmi'; // Your wagmi config
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './index.css'
 
-const queryClient = new QueryClient();
+import App from './App.jsx'
+import Pr0d from 'pr0d-sdk';
 
-function App() {
-  return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider>
-          <Pr0d appId="your-app-id">
-            <YourMainComponent />
-          </Pr0d>
-        </RainbowKitProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
-  );
-}
+createRoot(document.getElementById('root')).render(
+  <StrictMode>
+    <Pr0d appId='684dea5189269732f9817561'>
+      <App />
+    </Pr0d>
+  </StrictMode>,
+)
+
 ```
 
 ### 2. Use the authentication hook
 
 ```jsx
 import React from 'react';
-import { usePr0d } from '@pr0d/sdk';
+import { usePr0d } from 'pr0d-sdk';
 
 function Dashboard() {
   const { 
     isAuthenticated, 
     user, 
     login, 
-    logout,
-    triggerMfaSetup,
-    setupMFA,
-    verifyMFA 
+    logout
   } = usePr0d();
 
   if (!isAuthenticated) {
