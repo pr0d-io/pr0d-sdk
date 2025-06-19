@@ -1,0 +1,18 @@
+# Development files
+src/
+build/
+node_modules/
+.git/
+*.log
+vite.config.ts
+tsconfig.json
+index.html
+DEVELOPMENT.md
+CONTRIBUTING.md
+CHANGELOG.md
+docs/
+
+# Include only built files and essential package files
+!dist/
+!README.md
+!package.json 
