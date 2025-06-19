@@ -44,6 +44,7 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
     const { address, isConnected } = useAccount();
     const { connect, connectors: originalConnectors } = useConnect();
 
+
     // Create customized connectors array
     const connectors = React.useMemo(() => {
         return originalConnectors.map((connector, index) => {
@@ -3237,6 +3238,7 @@ Issued At: ${components.issuedAt}`;
 const queryClient = new QueryClient();
 
 const Pr0dWithProviders = ({ appId, children }: { appId: string; children: React.ReactNode }) => {
+
     return (
         <WagmiProvider config={config}>
             <QueryClientProvider client={queryClient}>

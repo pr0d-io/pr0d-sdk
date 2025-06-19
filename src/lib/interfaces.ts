@@ -17,6 +17,7 @@ export interface AppConfig {
     discord: boolean;
     telegram: boolean;
     apple: boolean;
+    walletConnect: string;
     options: {
         allowEmail: boolean;
         allowEmailPlus: boolean;
