@@ -2,24 +2,17 @@
 
 A comprehensive authentication SDK for React applications, providing wallet connectivity, OAuth integrations, MFA, passkeys, and embedded wallet functionality.
 
-## Features
-
-- **Multi-Factor Authentication** - TOTP-based MFA setup and verification
-- **Social Authentication** - Google, Discord, X (Twitter) OAuth integrations  
-- **Wallet Integration** - Connect external wallets (MetaMask, WalletConnect, etc.)
-- **Passkey Support** - WebAuthn-based passwordless authentication
-- **Email Authentication** - Email verification and linking
-- **Customizable UI** - Themed authentication flows matching your app
-- **Embedded Wallet** - Built-in wallet functionality with transaction signing
-- **Real-time Updates** - Live authentication state management
-
 ## Installation
 
 ```bash
 npm install pr0d-sdk
 ```
 
+## APP ID 
 
+Your app ID is the unique identifier for your app. It is used to fetch your app configuration and to authenticate users under your administration.
+
+You can find your app ID in the Pr0d dashboard.
 
 ## Quick Start
 
@@ -40,7 +33,6 @@ createRoot(document.getElementById('root')).render(
     </Pr0d>
   </StrictMode>,
 )
-
 ```
 
 ### 2. Use the authentication hook
@@ -54,8 +46,15 @@ function Dashboard() {
     isAuthenticated, 
     user, 
     login, 
-    logout
+    logout,
+    ready,
+    triggerEmailLink,
   } = usePr0d();
+
+  // Wait for SDK to be ready
+  if (!ready) {
+    return <div>Loading...</div>;
+  }
 
   if (!isAuthenticated) {
     return (
@@ -70,19 +69,25 @@ function Dashboard() {
     <div>
       <h1>Welcome, {user?.email?.email || 'User'}!</h1>
       <button onClick={logout}>Logout</button>
-      {!user?.mfa && (
-        <button onClick={triggerMfaSetup}>Setup MFA</button>
+      {!user?.email?.email && (
+        <button onClick={() => triggerEmailLink()}>Link your email</button>
       )}
     </div>
   );
 }
 ```
 
+## Prerequisites
+
+- React 18+
+- Modern browser with WebAuthn support (for passkeys)
+- HTTPS environment (required for passkeys and some OAuth providers)
+
 ## Configuration
 
 ### App Configuration
 
-The SDK automatically fetches your app configuration using the `appId`. Your app config includes:
+The SDK automatically fetches your app configuration using the `appId`. Configure your app at [https://dashboard.pr0d.io/](https://dashboard.pr0d.io/).
 
 ```typescript
 interface AppConfig {
@@ -116,37 +121,186 @@ interface AppConfig {
 
 The main hook that provides all authentication functionality:
 
-#### Authentication State
 ```typescript
-const {
-  accessToken,      // string | null - Current access token
-  isAuthenticated,  // boolean - Whether user is logged in
-  user,            // User | null - Current user object
-  logout,          // () => void - Logout function
-  login            // () => void - Trigger login modal
-} = usePr0d();
+interface AuthContextType {
+  // State
+  accessToken: string | null;
+  isAuthenticated: boolean;
+  user: User | null;
+  ready: boolean;
+
+  // Core Authentication
+  login: () => void;
+  logout: () => void;
+
+  // UI Triggers (Modal-based)
+  triggerMfaSetup: () => void;
+  triggerEmailLink: () => void;
+  triggerProviderLink: () => void;
+  triggerWalletLink: () => void;
+  triggerPasskeySetup: () => void;
+
+  // MFA Methods
+  setupMFA: () => Promise<{ secret: string; qrCodeUrl: string }>;
+  verifyMFA: (code: string) => Promise<boolean>;
+  deleteMFA: () => Promise<void>;
+
+  // Email Linking
+  initEmailLink: (email: string) => Promise<void>;
+  linkEmail: (email: string, code: string) => Promise<boolean>;
+
+  // Social Provider Methods
+  linkProvider: (provider: 'google' | 'discord' | 'x') => Promise<void>;
+  unlinkProvider: (provider: 'google' | 'discord' | 'x') => Promise<void>;
+  linkGoogle: () => Promise<void>;
+  linkDiscord: () => Promise<void>;
+  linkX: () => Promise<void>;
+
+  // Wallet Methods
+  linkWallet: (signature: string, nonce: string) => Promise<boolean>;
+  unlinkWallet: (address: string) => Promise<void>;
+
+  // Passkey Methods
+  initPasskey: (userHandle?: string) => Promise<{ options: any; type: 'registration' | 'authentication' }>;
+  verifyPasskey: (credential: any) => Promise<{ type: 'registration' | 'authentication'; user?: User; message: string }>;
+  listPasskeys: () => Promise<{ passkeys: any[]; count: number }>;
+  deletePasskey: (credentialId: string) => Promise<void>;
+
+  // User Management
+  getUser: (token?: string) => Promise<User>;
+
+  // Embedded Wallet
+  teeSignMessage: (message: string) => Promise<{ signature: string; address: string; message: string }>;
+  createTransaction: (txData: TransactionData) => Promise<{ transactionId: string; userAddress: string; txData: any; expiresAt: string }>;
+  getTransaction: (transactionId: string) => Promise<{ transactionId: string; userAddress: string; txData: any; status: string; createdAt: string; sponsorTxHash?: string }>;
+  sponsorTransaction: (transactionId: string, sponsorPrivateKey: string, rpcUrl: string, nonce?: number) => Promise<{ txHash: string; sponsorAddress: string; status: string; transactionId: string }>;
+  getPendingTransactions: () => Promise<{ transactions: any[]; count: number }>;
+}
 ```
 
+### Types
 
-The SDK automatically detects the environment and uses appropriate endpoints:
+```typescript
+interface User {
+  _id: string;
+  email?: { email: string };
+  mfa?: { secret: string };
+  google?: { email: string; name: string };
+  discord?: { username: string; id: string };
+  x?: { username: string; id: string };
+  wallets?: Array<{ address: string; first_verified_at: string }>;
+  passkeys?: Array<{ credentialID: string; deviceName?: string }>;
+  embeddedWallet?: { address: string };
+  [key: string]: any;
+}
 
-- **Development**: Uses development API endpoints
-- **Production**: Uses production API endpoints based on your app configuration
+interface TransactionData {
+  to: string;
+  value?: string;
+  data?: string;
+  gasLimit?: string;
+  maxFeePerGas?: string;
+  maxPriorityFeePerGas?: string;
+  chainId: number;
+}
+```
 
-## Documentation
+## Common Usage Patterns
 
-- **[Getting Started](docs/GETTING_STARTED.md)** - Quick setup guide for new users
-- **[API Reference](docs/API_REFERENCE.md)** - Complete API documentation
-- **[Examples](docs/EXAMPLES.md)** - Comprehensive code examples
-- **[Changelog](CHANGELOG.md)** - Version history and changes
-- **[Contributing](CONTRIBUTING.md)** - Guide for contributors
+### Error Handling
+
+Always wrap async operations in try-catch blocks:
+
+```jsx
+const handleMfaSetup = async () => {
+  try {
+    const { secret, qrCodeUrl } = await setupMFA();
+    // Handle success
+  } catch (error) {
+    console.error('MFA setup failed:', error.message);
+    // Show error to user
+  }
+};
+```
+
+### Email Linking Flow
+
+```jsx
+const handleEmailLink = async (email, code) => {
+  try {
+    // Step 1: Initialize email linking
+    await initEmailLink(email);
+    
+    // Step 2: User enters code from email
+    const success = await linkEmail(email, code);
+    if (success) {
+      console.log('Email linked successfully');
+    }
+  } catch (error) {
+    console.error('Email linking failed:', error.message);
+  }
+};
+```
+
+### Passkey Authentication
+
+```jsx
+const handlePasskeyAuth = async () => {
+  try {
+    const { options, type } = await initPasskey();
+    
+    let credential;
+    if (type === 'registration') {
+      credential = await navigator.credentials.create({ publicKey: options });
+    } else {
+      credential = await navigator.credentials.get({ publicKey: options });
+    }
+    
+    const result = await verifyPasskey(credential);
+    console.log('Passkey auth result:', result);
+  } catch (error) {
+    console.error('Passkey authentication failed:', error.message);
+  }
+};
+```
+
+### Social Provider Management
+
+```jsx
+const handleProviderLink = async (provider) => {
+  try {
+    await linkProvider(provider); // 'google', 'discord', or 'x'
+    console.log(`${provider} linked successfully`);
+  } catch (error) {
+    console.error(`Failed to link ${provider}:`, error.message);
+  }
+};
+```
+
+## Environment Variables
+
+No environment variables required - just your `appId` which you get from the Pr0d dashboard.
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Passkeys not working**: Ensure you're using HTTPS and a supported browser
+2. **OAuth redirects failing**: Check your `allowedOrigins` in the dashboard
+3. **"User not authenticated" errors**: Always check `isAuthenticated` before calling authenticated methods
+4. **"App not found" errors**: Verify your `appId` is correct
+
+### Browser Support
+
+- **Passkeys**: Chrome 67+, Firefox 60+, Safari 14+
+- **Wallet Connect**: All modern browsers
+- **OAuth**: All modern browsers
 
 ## Support
 
 - **Documentation**: [https://docs.pr0d.io](https://docs.pr0d.io)
-- **GitHub Issues**: [https://github.com/pr0d-io/pr0d-sdk/issues](hhttps://github.com/pr0d-io/pr0d-sdk/issues)
+- **GitHub Issues**: [https://github.com/pr0d-io/pr0d-sdk/issues](https://github.com/pr0d-io/pr0d-sdk/issues)
 - **Discord**: [https://discord.gg/pr0d](https://discord.gg/pr0d)
-- **Email**: support@pr0d.io
 
 ## License
 

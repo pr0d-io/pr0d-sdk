@@ -1,10 +1,10 @@
 import React, { useState, createContext, useContext, useEffect, useRef } from 'react';
-import axios from 'axios';
 import QRCodeStyling from 'qr-code-styling';
 import { useAccount, useConnect, useDisconnect, useSignMessage, useSignTypedData, WagmiProvider } from 'wagmi';
+import { config } from '../wagmi';
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { jwtDecode } from "jwt-decode";
-import { config } from '../wagmi';
 
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
 import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
@@ -12,431 +12,13 @@ import CloseIcon from '@mui/icons-material/Close';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 
+import { AppConfig, User, AuthContextType } from './interfaces';
+import { Spinner, FocusableButton, WalletStatusCircle, ProviderStatusCircle } from './components';
+import { isValidEmail, getDeviceName, base64urlToUint8Array, isLightColor, getLightAccentColor, getStyles } from './helpers';
 
-interface User {
-    _id: string;
-    email?: { email: string };
-    mfa?: { secret: string };
-    [key: string]: any;
-}
-
-interface AppConfig {
-    id: string;
-    name: string;
-    image: string;
-    background: string;
-    accent: string;
-    allowedOrigins: string[];
-    x: boolean;
-    google: boolean;
-    discord: boolean;
-    telegram: boolean;
-    apple: boolean;
-    options: {
-        allowEmail: boolean;
-        allowEmailPlus: boolean;
-        allowX: boolean;
-        allowGoogle: boolean;
-        allowDiscord: boolean;
-        allowTelegram: boolean;
-        allowExternalWallets: boolean;
-        allowPasskeys: boolean;
-    }
-}
-
-interface AuthContextType {
-    accessToken: string | null;
-    isAuthenticated: boolean;
-    user: User | null;
-    logout: () => void;
-    login: () => void;
-    triggerMfaSetup: () => void;
-    triggerEmailLink: () => void;
-    triggerProviderLink: () => void;
-    triggerWalletLink: () => void;
-    triggerPasskeySetup: () => void;
-    setupMFA: () => Promise<{ secret: string; qrCodeUrl: string }>;
-    verifyMFA: (code: string) => Promise<boolean>;
-    deleteMFA: () => Promise<void>;
-    initEmailLink: (email: string) => Promise<void>;
-    linkEmail: (email: string, code: string) => Promise<boolean>;
-    linkProvider: (provider: 'google' | 'discord' | 'x') => Promise<void>;
-    unlinkProvider: (provider: 'google' | 'discord' | 'x') => Promise<void>;
-    linkWallet: (signature: string, nonce: string) => Promise<boolean>;
-    unlinkWallet: (address: string) => Promise<void>;
-    linkGoogle: () => Promise<void>;
-    linkDiscord: () => Promise<void>;
-    linkX: () => Promise<void>;
-    initPasskey: (userHandle?: string) => Promise<{ options: any; type: 'registration' | 'authentication' }>;
-    verifyPasskey: (credential: any) => Promise<{ type: 'registration' | 'authentication'; user?: User; accessToken?: string; refreshToken?: string; message: string }>;
-    listPasskeys: () => Promise<{ passkeys: any[]; count: number }>;
-    deletePasskey: (credentialId: string) => Promise<void>;
-    getUser: (token?: string) => Promise<User>;
-    teeSignMessage: (message: string) => Promise<{ signature: string; address: string; message: string }>;
-    createTransaction: (txData: { to: string; value?: string; data?: string; gasLimit?: string; maxFeePerGas?: string; maxPriorityFeePerGas?: string; chainId: number }) => Promise<{ transactionId: string; userAddress: string; txData: any; expiresAt: string }>;
-    getTransaction: (transactionId: string) => Promise<{ transactionId: string; userAddress: string; txData: any; status: string; createdAt: string; sponsorTxHash?: string }>;
-    sponsorTransaction: (transactionId: string, sponsorPrivateKey: string, rpcUrl: string, nonce?: number) => Promise<{ txHash: string; sponsorAddress: string; status: string; transactionId: string }>;
-    getPendingTransactions: () => Promise<{ transactions: any[]; count: number }>;
-}
+import axios from 'axios';
 
 const AuthContext = createContext<AuthContextType | null>(null);
-
-// Spinner component
-const Spinner = ({ size = 16 }: { size?: number }) => (
-    <div
-        style={{
-            width: size,
-            height: size,
-            border: '2px solid #f3f3f3',
-            borderTop: '2px solid #666',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            display: 'inline-block'
-        }}
-    />
-);
-
-// Reusable button component with built-in focus and hover states
-interface FocusableButtonProps {
-    id: string;
-    style?: React.CSSProperties;
-    onClick?: () => void;
-    onMouseEnter?: () => void;
-    onMouseLeave?: () => void;
-    disabled?: boolean;
-    children: React.ReactNode;
-    focusedButton: string | null;
-    setFocusedButton: (id: string | null) => void;
-    hoveredButton: string | null;
-    setHoveredButton: (id: string | null) => void;
-    appConfig?: AppConfig | null;
-    focusBorderWidth?: number;
-    hoverBackgroundColor?: string;
-    defaultBackgroundColor?: string;
-}
-
-const FocusableButton = ({
-    id,
-    style = {},
-    onClick,
-    onMouseEnter,
-    onMouseLeave,
-    disabled = false,
-    children,
-    focusedButton,
-    setFocusedButton,
-    hoveredButton,
-    setHoveredButton,
-    appConfig,
-    focusBorderWidth = 1,
-    hoverBackgroundColor,
-    defaultBackgroundColor,
-    ...props
-}: FocusableButtonProps) => {
-    const isFocused = focusedButton === id;
-    const isHovered = hoveredButton === id;
-
-    const handleMouseEnter = () => {
-        setHoveredButton(id);
-        onMouseEnter?.();
-    };
-
-    const handleMouseLeave = () => {
-        setHoveredButton(null);
-        setFocusedButton(null); // Clear focus state when mouse leaves
-        onMouseLeave?.();
-    };
-
-    const handleMouseDown = () => {
-        setFocusedButton(id);
-    };
-
-    const handleMouseUp = () => {
-        setFocusedButton(null);
-    };
-
-    // Determine background color based on hover state
-    let backgroundColor = style.backgroundColor || defaultBackgroundColor;
-    if (isHovered && hoverBackgroundColor) {
-        backgroundColor = hoverBackgroundColor;
-    }
-
-    // Determine border based on focus state
-    const focusBorder = isFocused
-        ? `${focusBorderWidth}px solid ${appConfig?.accent || '#007bff'}`
-        : style.border || `${focusBorderWidth}px solid transparent`;
-
-    return (
-        <button
-            style={{
-                ...style,
-                backgroundColor,
-                border: focusBorder
-            }}
-            onClick={onClick}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-            onMouseDown={handleMouseDown}
-            onMouseUp={handleMouseUp}
-            disabled={disabled}
-            {...props}
-        >
-            {children}
-        </button>
-    );
-};
-
-// Add CSS animation for spinner
-if (typeof document !== 'undefined') {
-    const spinnerStyle = document.createElement('style');
-    spinnerStyle.textContent = `
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-      }
-    `;
-    if (!document.head.querySelector('style[data-spinner]')) {
-        spinnerStyle.setAttribute('data-spinner', 'true');
-        document.head.appendChild(spinnerStyle);
-    }
-}
-
-// Reusable Wallet Status Circle Component
-interface WalletCircleProps {
-    status: 'success' | 'error' | 'loading' | 'signing';
-    walletName: string;
-    connectors: readonly any[];
-    connectingWallet: any;
-    hasLoadingAnimation?: boolean;
-}
-
-interface ProviderCircleProps {
-    status: 'success' | 'error' | 'loading';
-    provider: 'google' | 'discord' | 'x';
-    hasLoadingAnimation?: boolean;
-}
-
-const WalletStatusCircle = ({
-    status,
-    walletName,
-    connectors,
-    connectingWallet,
-    hasLoadingAnimation = false
-}: WalletCircleProps) => {
-    const getStatusStyles = () => {
-        switch (status) {
-            case 'success':
-                return {
-                    border: '3px solid #4CAF50'
-                };
-            case 'error':
-                return {
-                    border: '3px solid #dc3545'
-                };
-            case 'loading':
-                return {
-                    border: '3px solid #20c997'
-                };
-            case 'signing':
-                return {
-                    border: '3px solid #e3f2fd'
-                };
-            default:
-                return {
-                    border: '3px solid #e9ecef'
-                };
-        }
-    };
-
-    const containerStyle = {
-        position: 'relative' as const,
-        marginBottom: 20,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-    };
-
-    const circleStyle = {
-        width: 64,
-        height: 64,
-        borderRadius: '50%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative' as const,
-        ...getStatusStyles()
-    };
-
-    const getWalletIcon = () => {
-        if (connectingWallet && connectors.find(c => c.id === connectingWallet.id)?.icon) {
-            return (
-                <img
-                    src={connectors.find(c => c.id === connectingWallet.id)?.icon}
-                    alt={walletName}
-                    style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 4
-                    }}
-                />
-            );
-        } else {
-            return (
-                <div style={{
-                    fontSize: 24,
-                    fontWeight: 600,
-                    color: '#4A90E2',
-                    width: 32,
-                    height: 32,
-                    borderRadius: 4,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                }}>
-                    {walletName.charAt(0).toUpperCase()}
-                </div>
-            );
-        }
-    };
-
-    return (
-        <div style={containerStyle}>
-            <div style={circleStyle}>
-                {getWalletIcon()}
-            </div>
-            {hasLoadingAnimation && (status === 'signing' || status === 'loading') && (
-                <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: 64,
-                    height: 64,
-                    border: '3px solid #e3f2fd',
-                    borderTop: '3px solid #20c997',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite'
-                }}></div>
-            )}
-        </div>
-    );
-};
-
-const ProviderStatusCircle = ({
-    status,
-    provider,
-    hasLoadingAnimation = false
-}: ProviderCircleProps) => {
-    const getStatusStyles = () => {
-        switch (status) {
-            case 'success':
-                return {
-                    border: '3px solid #4CAF50',
-                };
-            case 'error':
-                return {
-                    border: '3px solid #dc3545',
-                };
-            case 'loading':
-                return {
-                    border: '3px solid #20c997',
-                };
-            default:
-                return {
-                    border: '3px solid #e9ecef',
-                };
-        }
-    };
-
-    const containerStyle = {
-        position: 'relative' as const,
-        marginBottom: 20,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-    };
-
-    const circleStyle = {
-        width: 88,
-        height: 88,
-        borderRadius: '50%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative' as const,
-        ...getStatusStyles()
-    };
-
-    const getProviderIcon = () => {
-        const iconStyle = {
-            width: 64,
-            height: 64,
-            borderRadius: '50%',
-            padding: 12,
-            backgroundColor: 'transparent'
-        };
-
-        switch (provider) {
-            case 'google':
-                return (
-                    <svg style={iconStyle} viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                    </svg>
-                );
-            case 'discord':
-                return (
-                    <svg style={iconStyle} viewBox="0 0 24 24" fill="#5865F2">
-                        <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a .077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a .076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a .077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a .0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a .0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a .077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a .076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a .077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a .061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419-.019 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1568 2.4189Z" />
-                    </svg>
-                );
-            case 'x':
-                return (
-                    <svg style={iconStyle} viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                    </svg>
-                );
-            default:
-                return (
-                    <div style={{
-                        fontSize: 32,
-                        fontWeight: 600,
-                        color: '#4A90E2',
-                        width: 64,
-                        height: 64,
-                        borderRadius: '50%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                    }}>
-                        ?
-                    </div>
-                );
-        }
-    };
-
-    return (
-        <div style={containerStyle}>
-            <div style={circleStyle}>
-                {getProviderIcon()}
-            </div>
-            {hasLoadingAnimation && status === 'loading' && (
-                <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: 88,
-                    height: 88,
-                    border: '3px solid #e3f2fd',
-                    borderTop: '3px solid #20c997',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite'
-                }}></div>
-            )}
-        </div>
-    );
-};
 
 const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode }) => {
 
@@ -456,28 +38,47 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
+    const [ready, setReady] = useState<boolean>(false);
     const qrCodeRef = useRef<HTMLDivElement>(null);
 
     const { address, isConnected } = useAccount();
-    const { connect, connectors } = useConnect();
+    const { connect, connectors: originalConnectors } = useConnect();
 
+    // Create customized connectors array
+    const connectors = React.useMemo(() => {
+        return originalConnectors.map((connector, index) => {
+            // Create a new object with spread syntax to avoid mutating read-only properties
+            const customConnector = { ...connector } as any;
 
-    connectors[0].id = 'custom-binance';
-    connectors[0].name = 'Binance Wallet';
-    connectors[0].icon = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBmaWxsPSIjMUUxRTFFIiBkPSJNMCAwaDI1NnYyNTZIMHoiLz48cGF0aCBkPSJtNzMuMTgzMyAxMjguMDI4LTIyLjU2MzIgMjIuNTY0TDI4IDEyOC4wMjhsMjIuNTYzMi0yMi41NjMgMjIuNjIwMSAyMi41NjNabTU0Ljg0NDctNTQuODQ0NyAzOC43MDUgMzguNzA1NyAyMi41NjMtMjIuNTYyOEwxMjguMDI4IDI4IDY2LjcwNDIgODkuMzI0MmwyMi41NjMyIDIyLjU2MjggMzguNzYwNi0zOC43MDM3Wm03Ny40MDkgMzIuMjgxNy0yMi41NjMgMjIuNTYzIDIyLjU2MyAyMi41NjRMMjI4IDEyOC4wMjhsLTIyLjU2My0yMi41NjNabS03Ny40MDkgNzcuNDA5LTM4LjcwMzgtMzguNzA1LTIyLjU2MzIgMjIuNTY0IDYxLjI2NyA2MS4zMjQgNjEuMjY4LTYxLjMyNC0yMi41NjMtMjIuNTY0LTM4LjcwNSAzOC43MDVabTAtMzIuMjgyIDIyLjU2NC0yMi41NjQtMjIuNTY0LTIyLjU2My0yMi42MiAyMi41NjMgMjIuNjIgMjIuNTY0WiIgZmlsbD0iI0YwQjkwQiIvPjwvc3ZnPg==';
-    connectors[0].requireQRcode = true;
+            switch (index) {
+                case 0:
+                    customConnector.id = 'custom-binance';
+                    customConnector.name = 'Binance Wallet';
+                    customConnector.icon = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBmaWxsPSIjMUUxRTFFIiBkPSJNMCAwaDI1NnYyNTZIMHoiLz48cGF0aCBkPSJtNzMuMTgzMyAxMjguMDI4LTIyLjU2MzIgMjIuNTY0TDI4IDEyOC4wMjhsMjIuNTYzMi0yMi41NjMgMjIuNjIwMSAyMi41NjNabTU0Ljg0NDctNTQuODQ0NyAzOC43MDUgMzguNzA1NyAyMi41NjMtMjIuNTYyOEwxMjguMDI4IDI4IDY2LjcwNDIgODkuMzI0MmwyMi41NjMyIDIyLjU2MjggMzguNzYwNi0zOC43MDM3Wm03Ny40MDkgMzIuMjgxNy0yMi41NjMgMjIuNTYzIDIyLjU2MyAyMi41NjRMMjI4IDEyOC4wMjhsLTIyLjU2My0yMi41NjNabS03Ny40MDkgNzcuNDA5LTM4LjcwMzgtMzguNzA1LTIyLjU2MzIgMjIuNTY0IDYxLjI2NyA2MS4zMjQgNjEuMjY4LTYxLjMyNC0yMi41NjMtMjIuNTY0LTM4LjcwNSAzOC43MDVabTAtMzIuMjgyIDIyLjU2NC0yMi41NjQtMjIuNTY0LTIyLjU2My0yMi42MiAyMi41NjMgMjIuNjIgMjIuNTY0WiIgZmlsbD0iI0YwQjkwQiIvPjwvc3ZnPg==';
+                    customConnector.requireQRcode = true;
+                    break;
+                case 1:
+                    customConnector.id = 'custom-trust';
+                    customConnector.name = 'Trust Wallet';
+                    customConnector.icon = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9Im5vbmUiIHdpZHRoPSIyOCIgaGVpZ2h0PSIyOCIgdmlld0JveD0iMCAwIDI4IDI4Ij48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMCAwaDI4djI4SDB6Ii8+PHBhdGggZmlsbD0iIzA1MDBGRiIgZD0iTTYgNy41ODMgMTMuNTMgNXYxNy44OEJDOC4xNSAyMC40OTggNiAxNS45MjggNiAxMy4zNDVWNy41ODNaIi8+PHBhdGggZmlsbD0idXJsKCNhKSIgZD0iTTIyIDcuNTgzIDEzLjUzIDV2MTcuODgyYzYuMDUtMi4zODQgOC40Ny02Ljk1NCA4LjQ3LTkuNTM3VjcuNTgzWiIvPjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iYSIgeDE9IjE5Ljc2OCIgeDI9IjE0LjA3MiIgeTE9IjMuNzUzIiB5Mj0iMjIuODUzIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHN0b3Agb2Zmc2V0PSIuMDIiIHN0b3AtY29sb3I9IiMwMEYiLz48c3RvcCBvZmZzZXQ9Ii4wOCIgc3RvcC1jb2xvcj0iIzAwOTRGRiIvPjxzdG9wIG9mZnNldD0iLjE2IiBzdG9wLWNvbG9yPSIjNDhGRjkxIi8+PHN0b3Agb2Zmc2V0PSIuNDIiIHN0b3AtY29sb3I9IiMwMDk0RkYiLz48c3RvcCBvZmZzZXQ9Ii42OCIgc3RvcC1jb2xvcj0iIzAwMzhGRiIvPjxzdG9wIG9mZnNldD0iLjkiIHN0b3AtY29sb3I9IiMwNTAwRkYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48L3N2Zz4K';
+                    customConnector.requireQRcode = true;
+                    break;
+                case 2:
+                    customConnector.id = 'custom-walletconnect';
+                    customConnector.name = 'WalletConnect';
+                    customConnector.icon = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgiIGhlaWdodD0iMjgiIHZpZXdCb3g9IjAgMCAyOCAyOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI4IiBoZWlnaHQ9IjI4IiBmaWxsPSIjM0I5OUZDIi8+CjxwYXRoIGQ9Ik04LjM4OTY5IDEwLjM3MzlDMTEuNDg4MiA3LjI3NTM4IDE2LjUxMTggNy4yNzUzOCAxOS42MTAzIDEwLjM3MzlMMTkuOTgzMiAxMC43NDY4QzIwLjEzODIgMTAuOTAxNyAyMC4xMzgyIDExLjE1MjkgMTkuOTgzMiAxMS4zMDc4TDE4LjcwNzYgMTIuNTgzNUMxOC42MzAxIDEyLjY2MDkgMTguNTA0NSAxMi42NjA5IDE4LjQyNzEgMTIuNTgzNUwxNy45MTM5IDEyLjA3MDNDMTUuNzUyMyA5LjkwODcgMTIuMjQ3NyA5LjkwODcgMTAuMDg2MSAxMi4wNzAzTDkuNTM2NTUgMTIuNjE5OEM5LjQ1OTA5IDEyLjY5NzMgOS4zMzM1IDEyLjY5NzMgOS4yNTYwNCAxMi42MTk4TDcuOTgwMzkgMTEuMzQ0MkM3LjgyNTQ3IDExLjE4OTMgNy44MjU0NyAxMC45MzgxIDcuOTgwMzkgMTAuNzgzMkw4LjM4OTY5IDEwLjM3MzlaTTIyLjI0ODUgMTMuMDEyTDIzLjM4MzggMTQuMTQ3NEMyMy41Mzg3IDE0LjMwMjMgMjMuNTM4NyAxNC41NTM1IDIzLjM4MzggMTQuNzA4NEwxOC4yNjQ1IDE5LjgyNzdDMTguMTA5NiAxOS45ODI3IDE3Ljg1ODQgMTkuOTgyNyAxNy43MDM1IDE5LjgyNzdDMTcuNzAzNSAxOS44Mjc3IDE3LjcwMzUgMTkuODI3NyAxNy43MDM1IDE5LjgyNzdMMTQuMDcwMiAxNi4xOTQ0QzE0LjAzMTQgMTYuMTU1NyAxMy45Njg2IDE2LjE1NTcgMTMuOTI5OSAxNi4xOTQ0QzEzLjkyOTkgMTYuMTk0NCAxMy45Mjk5IDE2LjE5NDQgMTMuOTI5OSAxNi4xOTQ0TDEwLjI5NjYgMTkuODI3N0MxMC4xNDE3IDE5Ljk4MjcgOS44OTA1MyAxOS45ODI3IDkuNzM1NjEgMTkuODI3OEM5LjczNTYgMTkuODI3OCA5LjczNTYgMTkuODI3NyA5LjczNTYgMTkuODI3N0w0LjYxNjE5IDE0LjcwODNDNC40NjEyNyAxNC41NTM0IDQuNDYxMjcgMTQuMzAyMiA0LjYxNjE5IDE0LjE0NzNMNS43NTE1MiAxMy4wMTJDNS45MDY0NSAxMi44NTcgNi4xNTc2MyAxMi44NTcgNi4zMTI1NSAxMy4wMTJMOS45NDU5NSAxNi42NDU0QzkuOTg0NjggMTYuNjg0MSAxMC4wNDc1IDE2LjY4NDEgMTAuMDg2MiAxNi42NDU0QzEwLjA4NjIgMTYuNjQ1NCAxMC4wODYyIDE2LjY0NTQgMTAuMDg2MiAxNi42NDU0TDEzLjcxOTQgMTMuMDEyQzEzLjg3NDMgMTIuODU3IDE0LjEyNTUgMTIuODU3IDE0LjI4MDUgMTMuMDEyQzE0LjI4MDUgMTMuMDEyIDE0LjI4MDUgMTMuMDEyIDE0LjI4MDUgMTMuMDEyTDE3LjkxMzkgMTYuNjQ1NEMxNy45NTI2IDE2LjY4NDEgMTguMDE1NCAxNi42ODQxIDE4LjA1NDEgMTYuNjQ1NEwyMS42ODc0IDEzLjAxMkMyMS44NDI0IDEyLjg1NzEgMjIuMDkzNiAxMi44NTcxIDIyLjI0ODUgMTMuMDEyWiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cg==';
+                    customConnector.requireQRcode = true;
+                    break;
+                case 3:
+                    customConnector.icon = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgiIGhlaWdodD0iMjgiIHZpZXdCb3g9IjAgMCAyOCAyOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI4IiBoZWlnaHQ9IjI4IiBmaWxsPSIjMkM1RkY2Ii8+CjxwYXRoIGZpbGwtcnVsZT0iZXZlbm9kZCIgY2xpcC1ydWxlPSJldmVub2RkIiBkPSJNMTQgMjMuOEMxOS40MTI0IDIzLjggMjMuOCAxOS40MTI0IDIzLjggMTRDMjMuOCA4LjU4NzYxIDE5LjQxMjQgNC4yIDE0IDQuMkM4LjU4NzYxIDQuMiA0LjIgOC41ODc2MSA0LjIgMTRDNC4yIDE5LjQxMjQgOC41ODc2MSAyMy44IDE0IDIzLjhaTTExLjU1IDEwLjhDMTEuMTM1OCAxMC44IDEwLjggMTEuMTM1OCAxMC44IDExLjU1VjE2LjQ1QzEwLjggMTYuODY0MiAxMS4xMzU4IDE3LjIgMTEuNTUgMTcuMkgxNi40NUMxNi44NjQyIDE3LjIgMTcuMiAxNi44NjQyIDE3LjIgMTYuNDVWMTEuNTVDMTcuMiAxMS4xMzU4IDE2Ljg2NDIgMTAuOCAxNi40NSAxMC44SDExLjU1WiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cg==';
+                    break;
+                default:
+                    break;
+            }
 
-    connectors[1].id = 'custom-trust';
-    connectors[1].name = 'Trust Wallet';
-    connectors[1].icon = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9Im5vbmUiIHdpZHRoPSIyOCIgaGVpZ2h0PSIyOCIgdmlld0JveD0iMCAwIDI4IDI4Ij48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMCAwaDI4djI4SDB6Ii8+PHBhdGggZmlsbD0iIzA1MDBGRiIgZD0iTTYgNy41ODMgMTMuNTMgNXYxNy44ODJDOC4xNSAyMC40OTggNiAxNS45MjggNiAxMy4zNDVWNy41ODNaIi8+PHBhdGggZmlsbD0idXJsKCNhKSIgZD0iTTIyIDcuNTgzIDEzLjUzIDV2MTcuODgyYzYuMDUtMi4zODQgOC40Ny02Ljk1NCA4LjQ3LTkuNTM3VjcuNTgzWiIvPjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iYSIgeDE9IjE5Ljc2OCIgeDI9IjE0LjA3MiIgeTE9IjMuNzUzIiB5Mj0iMjIuODUzIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHN0b3Agb2Zmc2V0PSIuMDIiIHN0b3AtY29sb3I9IiMwMEYiLz48c3RvcCBvZmZzZXQ9Ii4wOCIgc3RvcC1jb2xvcj0iIzAwOTRGRiIvPjxzdG9wIG9mZnNldD0iLjE2IiBzdG9wLWNvbG9yPSIjNDhGRjkxIi8+PHN0b3Agb2Zmc2V0PSIuNDIiIHN0b3AtY29sb3I9IiMwMDk0RkYiLz48c3RvcCBvZmZzZXQ9Ii42OCIgc3RvcC1jb2xvcj0iIzAwMzhGRiIvPjxzdG9wIG9mZnNldD0iLjkiIHN0b3AtY29sb3I9IiMwNTAwRkYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48L3N2Zz4K';
-    connectors[1].requireQRcode = true;
-
-    connectors[2].id = 'custom-walletconnect';
-    connectors[2].name = 'WalletConnect';
-    connectors[2].icon = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgiIGhlaWdodD0iMjgiIHZpZXdCb3g9IjAgMCAyOCAyOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI4IiBoZWlnaHQ9IjI4IiBmaWxsPSIjM0I5OUZDIi8+CjxwYXRoIGQ9Ik04LjM4OTY5IDEwLjM3MzlDMTEuNDg4MiA3LjI3NTM4IDE2LjUxMTggNy4yNzUzOCAxOS42MTAzIDEwLjM3MzlMMTkuOTgzMiAxMC43NDY4QzIwLjEzODIgMTAuOTAxNyAyMC4xMzgyIDExLjE1MjkgMTkuOTgzMiAxMS4zMDc4TDE4LjcwNzYgMTIuNTgzNUMxOC42MzAxIDEyLjY2MDkgMTguNTA0NSAxMi42NjA5IDE4LjQyNzEgMTIuNTgzNUwxNy45MTM5IDEyLjA3MDNDMTUuNzUyMyA5LjkwODcgMTIuMjQ3NyA5LjkwODcgMTAuMDg2MSAxMi4wNzAzTDkuNTM2NTUgMTIuNjE5OEM5LjQ1OTA5IDEyLjY5NzMgOS4zMzM1IDEyLjY5NzMgOS4yNTYwNCAxMi42MTk4TDcuOTgwMzkgMTEuMzQ0MkM3LjgyNTQ3IDExLjE4OTMgNy44MjU0NyAxMC45MzgxIDcuOTgwMzkgMTAuNzgzMkw4LjM4OTY5IDEwLjM3MzlaTTIyLjI0ODUgMTMuMDEyTDIzLjM4MzggMTQuMTQ3NEMyMy41Mzg3IDE0LjMwMjMgMjMuNTM4NyAxNC41NTM1IDIzLjM4MzggMTQuNzA4NEwxOC4yNjQ1IDE5LjgyNzdDMTguMTA5NiAxOS45ODI3IDE3Ljg1ODQgMTkuOTgyNyAxNy43MDM1IDE5LjgyNzdDMTcuNzAzNSAxOS44Mjc3IDE3LjcwMzUgMTkuODI3NyAxNy43MDM1IDE5LjgyNzdMMTQuMDcwMiAxNi4xOTQ0QzE0LjAzMTQgMTYuMTU1NyAxMy45Njg2IDE2LjE1NTcgMTMuOTI5OSAxNi4xOTQ0QzEzLjkyOTkgMTYuMTk0NCAxMy45Mjk5IDE2LjE5NDQgMTMuOTI5OSAxNi4xOTQ0TDEwLjI5NjYgMTkuODI3N0MxMC4xNDE3IDE5Ljk4MjcgOS44OTA1MyAxOS45ODI3IDkuNzM1NjEgMTkuODI3OEM5LjczNTYgMTkuODI3OCA5LjczNTYgMTkuODI3NyA5LjczNTYgMTkuODI3N0w0LjYxNjE5IDE0LjcwODNDNC40NjEyNyAxNC41NTM0IDQuNDYxMjcgMTQuMzAyMiA0LjYxNjE5IDE0LjE0NzNMNS43NTE1MiAxMy4wMTJDNS45MDY0NSAxMi44NTcgNi4xNTc2MyAxMi44NTcgNi4zMTI1NSAxMy4wMTJMOS45NDU5NSAxNi42NDU0QzkuOTg0NjggMTYuNjg0MSAxMC4wNDc1IDE2LjY4NDEgMTAuMDg2MiAxNi42NDU0QzEwLjA4NjIgMTYuNjQ1NCAxMC4wODYyIDE2LjY0NTQgMTAuMDg2MiAxNi42NDU0TDEzLjcxOTQgMTMuMDEyQzEzLjg3NDMgMTIuODU3IDE0LjEyNTUgMTIuODU3IDE0LjI4MDUgMTMuMDEyQzE0LjI4MDUgMTMuMDEyIDE0LjI4MDUgMTMuMDEyIDE0LjI4MDUgMTMuMDEyTDE3LjkxMzkgMTYuNjQ1NEMxNy45NTI2IDE2LjY4NDEgMTguMDE1NCAxNi42ODQxIDE4LjA1NDEgMTYuNjQ1NEwyMS42ODc0IDEzLjAxMkMyMS44NDI0IDEyLjg1NzEgMjIuMDkzNiAxMi44NTcxIDIyLjI0ODUgMTMuMDEyWiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cg==';
-    connectors[2].requireQRcode = true;
-
-    connectors[3].icon = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgiIGhlaWdodD0iMjgiIHZpZXdCb3g9IjAgMCAyOCAyOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI4IiBoZWlnaHQ9IjI4IiBmaWxsPSIjMkM1RkY2Ii8+CjxwYXRoIGZpbGwtcnVsZT0iZXZlbm9kZCIgY2xpcC1ydWxlPSJldmVub2RkIiBkPSJNMTQgMjMuOEMxOS40MTI0IDIzLjggMjMuOCAxOS40MTI0IDIzLjggMTRDMjMuOCA4LjU4NzYxIDE5LjQxMjQgNC4yIDE0IDQuMkM4LjU4NzYxIDQuMiA0LjIgOC41ODc2MSA0LjIgMTRDNC4yIDE5LjQxMjQgOC41ODc2MSAyMy44IDE0IDIzLjhaTTExLjU1IDEwLjhDMTEuMTM1OCAxMC44IDEwLjggMTEuMTM1OCAxMC44IDExLjU1VjE2LjQ1QzEwLjggMTYuODY0MiAxMS4xMzU4IDE3LjIgMTEuNTUgMTcuMkgxNi40NUMxNi44NjQyIDE3LjIgMTcuMiAxNi44NjQyIDE3LjIgMTYuNDVWMTEuNTVDMTcuMiAxMS4xMzU4IDE2Ljg2NDIgMTAuOCAxNi40NSAxMC44SDExLjU1WiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+Cg=='
+            return customConnector;
+        });
+    }, [originalConnectors]);
 
     const { disconnect } = useDisconnect();
     const { signMessage } = useSignMessage();
@@ -489,11 +90,6 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
         connector: any;
     } | null>(null);
 
-    // Email validation function
-    const isValidEmail = (email: string): boolean => {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailRegex.test(email);
-    };
     const [mfaCode, setMfaCode] = useState(['', '', '', '', '', '']);
     const mfaInputRefs = useRef<(HTMLInputElement | null)[]>([]);
     const [mfaStep, setMfaStep] = useState<'method' | 'qr' | 'code' | 'passkey' | 'passkey-success'>('method');
@@ -519,7 +115,7 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
     const [walletConnectedSuccessfully, setWalletConnectedSuccessfully] = useState(false);
     const [focusedInput, setFocusedInput] = useState<string | null>(null);
     const [isTransitioning, setIsTransitioning] = useState(false);
-    const [nextView, setNextView] = useState<{ show: boolean; view: string } | null>(null);
+    const [nextView, setNextView] = useState<{ show: boolean; view?: 'loginorsignup' | 'wallet' | 'wallet-link' | 'wallet-connecting' | 'wallet-signing' | 'wallet-success' | 'wallet-error' | 'mfa' | 'link' | 'provider' | 'oauth-error' | 'oauth-loading' | 'passkey-loading' | 'passkey-signing' | 'passkey-error' } | null>(null);
     const [currentView, setCurrentView] = useState(showPopup);
     const [hoveredButton, setHoveredButton] = useState<string | null>(null);
     const [focusedButton, setFocusedButton] = useState<string | null>(null);
@@ -528,7 +124,7 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
     const styles = React.useMemo(() => getStyles(appConfig), [appConfig]);
 
     // Smooth transition function for changing popup views
-    const transitionToView = (newView: { show: boolean; view: string }) => {
+    const transitionToView = (newView: { show: boolean; view?: 'loginorsignup' | 'wallet' | 'wallet-link' | 'wallet-connecting' | 'wallet-signing' | 'wallet-success' | 'wallet-error' | 'mfa' | 'link' | 'provider' | 'oauth-error' | 'oauth-loading' | 'passkey-loading' | 'passkey-signing' | 'passkey-error' }) => {
         if (isTransitioning) return; // Prevent multiple transitions
 
         setIsTransitioning(true);
@@ -565,10 +161,25 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
     }, []);
 
     useEffect(() => {
+        const fetchAppConfig = async () => {
+            try {
+                const res = await axios.get(`${baseUrl}/api/apps/${appId}`, {
+                    headers: { 'pr0d-app-id': appId }
+                });
+                setAppConfig(res.data.data);
+                setReady(true);
+            } catch (error) {
+                console.error('Failed to fetch app configuration:', error);
+                setReady(true); // Set ready to true even if config fetch fails
+            }
+        };
+
+        fetchAppConfig();
+    }, [appId]);
+
+    useEffect(() => {
         try {
             const accessToken = localStorage.getItem('pr0d:access_token');
-
-            // check if token is valid first
             if (accessToken) {
                 const decodedToken = jwtDecode(accessToken);
                 if (!decodedToken.exp || decodedToken.exp < Date.now() / 1000) {
@@ -578,38 +189,20 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
                     refreshSession();
                 } else {
                     setAccessToken(accessToken);
-                    // Pass the access token directly since state update is async
                     getUser(accessToken);
-
                 }
             }
         } catch (error) {
             console.error('Failed to decode token:', error);
         }
-
-        // Fetch app configuration
-        const fetchAppConfig = async () => {
-            try {
-                const res = await axios.get(`${baseUrl}/api/apps/${appId}`, {
-                    headers: { 'pr0d-app-id': appId }
-                });
-                setAppConfig(res.data.data);
-            } catch (error) {
-                console.error('Failed to fetch app configuration:', error);
-            }
-        };
-
-        fetchAppConfig();
-
-    }, [appId]);
+    }, []);
 
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const success = urlParams.get('status') === 'success';
         const code = urlParams.get('code');
-        const token = urlParams.get('token'); // Keep for backward compatibility
         const error = urlParams.get('error');
-        // Check for OAuth parameters
+
         const oauthCode = urlParams.get('pr0d_oauth_code');
         const oauthState = urlParams.get('pr0d_oauth_state');
         const oauthProvider = urlParams.get('pr0d_oauth_provider');
@@ -619,7 +212,6 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
             window.history.replaceState({}, document.title, window.location.pathname);
 
             if (oauthCode === 'error') {
-                // Show OAuth error popup
                 setOauthError({ provider: oauthProvider, state: oauthState, errorMessage: error });
                 setShowPopup({ show: true, view: 'oauth-error' });
             } else {
@@ -696,7 +288,7 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
 
     const handleCodeInput = (index: number, value: string) => {
         if (/^[0-9]?$/.test(value)) {
-            // Clear error when user starts typing
+
             if (error) {
                 setError(null);
             }
@@ -781,8 +373,7 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
 
         if (refreshToken) {
             try {
-                // put the refresh token as body
-                const res = await axios.delete(`${baseUrl}/api/sessions/revoke`, {
+                await axios.delete(`${baseUrl}/api/sessions/revoke`, {
                     headers: { 'pr0d-app-id': appId },
                     data: { refresh_token: refreshToken }
                 });
@@ -849,7 +440,7 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
                 {
                     headers: {
                         'pr0d-app-id': appId,
-                        'Authorization': `Bearer ${accessToken}`
+                        'authorization': `Bearer ${accessToken}`
                     }
                 }
             );
@@ -872,7 +463,7 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
                 {
                     headers: {
                         'pr0d-app-id': appId,
-                        'Authorization': `Bearer ${accessToken}`
+                        'authorization': `Bearer ${accessToken}`
                     }
                 }
             );
@@ -896,7 +487,7 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
                 {
                     headers: {
                         'pr0d-app-id': appId,
-                        'Authorization': `Bearer ${accessToken}`
+                        'authorization': `Bearer ${accessToken}`
                     }
                 }
             );
@@ -1022,7 +613,6 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
 
         // Set user initiated flag here when they actually click a wallet
         setUserInitiatedWalletAuth(true);
-        console.log('User clicked wallet option:', connector.name);
 
         // Clear any existing QR code immediately to prevent showing old QR with new connector logo
         if (qrCodeRef.current) {
@@ -1053,7 +643,6 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
 
 
         if (isWalletConnectBased) {
-            console.log('Setting up WalletConnect-based wallet:', connector.name);
 
             // For WalletConnect-based wallets, show our custom QR code view
             transitionToView({ show: true, view: 'wallet-connecting' });
@@ -1061,11 +650,7 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
             // Try to get the provider first and set up event listeners
             const setupWalletConnect = async () => {
                 try {
-                    console.log('Setting up WalletConnect...');
-
-                    // Get the provider
                     const provider = await connector.getProvider();
-                    console.log('WalletConnect provider:', provider);
 
                     if (provider) {
                         // Listen for various possible events
@@ -1073,7 +658,6 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
 
                         events.forEach(eventName => {
                             provider.on?.(eventName, (data: any) => {
-                                console.log(`WalletConnect event ${eventName}:`, data);
                                 if (typeof data === 'string' && data.startsWith('wc:')) {
                                     setWalletConnectUri(data);
                                     walletConnectUriReceived.current = true;
@@ -1098,7 +682,6 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
                         if (provider.connector) {
                             events.forEach(eventName => {
                                 provider.connector.on?.(eventName, (data: any) => {
-                                    console.log(`WalletConnect connector event ${eventName}:`, data);
                                     if (typeof data === 'string' && data.startsWith('wc:')) {
                                         setWalletConnectUri(data);
                                         walletConnectUriReceived.current = true;
@@ -1144,41 +727,32 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
             // Fallback: Try to get URI after a short delay
             const timeoutId = setTimeout(async () => {
                 // Check if we've received a URI using the ref
-                console.log('Fallback timeout fired, URI received:', walletConnectUriReceived.current);
 
                 if (!walletConnectUriReceived.current) {
                     try {
                         const provider = await connector.getProvider();
-                        console.log('Fallback: Checking provider for URI...', provider);
 
                         // Try different ways to access the URI
                         if (provider?.connector?.uri) {
-                            console.log('Found URI in provider.connector.uri:', provider.connector.uri);
                             setWalletConnectUri(provider.connector.uri);
                             walletConnectUriReceived.current = true;
                         } else if (provider?.uri) {
-                            console.log('Found URI in provider.uri:', provider.uri);
                             setWalletConnectUri(provider.uri);
                             walletConnectUriReceived.current = true;
                         } else if (provider?.session?.uri) {
-                            console.log('Found URI in provider.session.uri:', provider.session.uri);
                             setWalletConnectUri(provider.session.uri);
                             walletConnectUriReceived.current = true;
                         } else {
-                            console.log('No URI found after timeout, showing loading message');
-                            // Instead of falling back to RainbowKit modal, show a loading message or error
-                            // Keep the custom popup but show a message that QR code is loading
                             setWalletError('Unable to generate QR code. Please try again.');
                             setShowPopup({ show: true, view: 'wallet-error' });
                         }
                     } catch (error) {
                         console.error('Fallback URI check failed:', error);
-                        // Show error in custom popup instead of falling back to RainbowKit
                         setWalletError('Failed to initialize wallet connection. Please try again.');
                         setShowPopup({ show: true, view: 'wallet-error' });
                     }
                 } else {
-                    console.log('URI already exists, skipping fallback');
+                    // console.log('URI already exists, skipping fallback');
                 }
                 setWalletConnectTimeout(null);
             }, 50000); // Increased timeout to 3 seconds for better reliability
@@ -1190,8 +764,6 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
 
         // For non-WalletConnect wallets (like injected MetaMask), show connecting view
         setShowPopup({ show: true, view: 'wallet-connecting' });
-
-        console.log('Setting up injected wallet:', connector.name);
 
         connect(
             { connector },
@@ -1255,7 +827,6 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
     // Authenticate with wallet signature
     const authenticateWallet = async (signature: string, nonce: string) => {
         try {
-            console.log('Authenticating with:', { signature, nonce });
             const res = await axios.post(`${baseUrl}/api/wallet/auth`, {
                 signature,
                 nonce
@@ -1279,19 +850,15 @@ const Pr0d = ({ appId, children }: { appId: string; children: React.ReactNode })
 
     // Handle wallet signature
     const handleWalletSignature = async () => {
-        console.log('handleWalletSignature called, walletAuthData:', walletAuthData);
         if (!walletAuthData) {
-            console.log('No walletAuthData, exiting handleWalletSignature');
             return;
         }
 
-        console.log('Setting loading to true and showing wallet-signing popup');
         setLoading(true);
         setError(null);
 
         // Show signing popup
         setShowPopup({ show: true, view: 'wallet-signing' });
-        console.log('Popup set to wallet-signing view');
 
         try {
             // Use the ERC-4361 components from the backend
@@ -1309,14 +876,12 @@ Chain ID: ${components.chainId}
 Nonce: ${components.nonce}
 Issued At: ${components.issuedAt}`;
 
-            console.log('Signing ERC-4361 message:', siweMessage);
 
             signMessage(
                 { message: siweMessage },
                 {
                     onSuccess: async (signature) => {
                         try {
-                            console.log('Signature received:', signature);
                             if (isWalletLinking) {
                                 await linkWallet(signature, walletAuthData.nonce);
                                 closePopup();
@@ -1354,17 +919,11 @@ Issued At: ${components.issuedAt}`;
 
     // Track if we just initiated a wallet connection
     useEffect(() => {
-        console.log('Wallet connection useEffect triggered:', {
-            isConnected,
-            address,
-            userInitiatedWalletAuth,
-            walletAuthCompleted
-        });
+
 
         // When wallet connects successfully, proceed to authentication
         // Only trigger if user explicitly initiated wallet auth and we haven't already completed auth for this address
         if (isConnected && address && userInitiatedWalletAuth && !walletAuthCompleted) {
-            console.log('All conditions met, starting authentication flow');
 
             // First show wallet connected successfully state
             setWalletConnectedSuccessfully(true);
@@ -1376,7 +935,6 @@ Issued At: ${components.issuedAt}`;
                     // Wait a bit longer for mobile wallet connections (like Binance) to stabilize
                     await new Promise(resolve => setTimeout(resolve, 1000)); // Show success for 1.5 seconds
 
-                    console.log('Initializing wallet auth for address:', address);
                     const authData = await initWalletAuth(address);
                     setWalletAuthData({
                         ...authData,
@@ -1403,8 +961,7 @@ Issued At: ${components.issuedAt}`;
 
     // Trigger wallet signature when walletAuthData is set
     useEffect(() => {
-        if (walletAuthData && userInitiatedWalletAuth && !walletAuthCompleted) {
-            console.log('walletAuthData set, triggering signature:', walletAuthData);
+        if (walletAuthData && userInitiatedWalletAuth && !walletAuthCompleted) {    
             handleWalletSignature();
         }
     }, [walletAuthData, userInitiatedWalletAuth, walletAuthCompleted]);
@@ -1695,7 +1252,7 @@ Issued At: ${components.issuedAt}`;
 
             // If we're in an incomplete wallet connection state, or if we just completed wallet linking, disconnect to clean up
             if (isConnected && (walletAuthData && !accessToken || isWalletLinking)) {
-                console.log('Cleaning up wallet connection after', isWalletLinking ? 'linking' : 'incomplete auth');
+
                 disconnect();
                 // Reset completion flag for fresh start
                 setWalletAuthCompleted(false);
@@ -1732,7 +1289,7 @@ Issued At: ${components.issuedAt}`;
                 {
                     headers: {
                         'pr0d-app-id': appId,
-                        'Authorization': `Bearer ${accessToken}`
+                        'authorization': `Bearer ${accessToken}`
                     }
                 }
             );
@@ -1783,7 +1340,7 @@ Issued At: ${components.issuedAt}`;
                 {
                     headers: {
                         'pr0d-app-id': appId,
-                        'Authorization': `Bearer ${accessToken}`
+                        'authorization': `Bearer ${accessToken}`
                     }
                 }
             );
@@ -1833,7 +1390,7 @@ Issued At: ${components.issuedAt}`;
             const res = await axios.get(`${baseUrl}/api/${provider}/init`, {
                 headers: {
                     'pr0d-app-id': appId,
-                    'Authorization': `Bearer ${accessToken}`
+                    'authorization': `Bearer ${accessToken}`
                 },
                 params: { redirect_uri: window.location.href }
             });
@@ -1862,7 +1419,7 @@ Issued At: ${components.issuedAt}`;
             const res = await axios.delete(`${baseUrl}/api/${provider}/delete`, {
                 headers: {
                     'pr0d-app-id': appId,
-                    'Authorization': `Bearer ${accessToken}`
+                    'authorization': `Bearer ${accessToken}`
                 }
             });
 
@@ -1884,7 +1441,7 @@ Issued At: ${components.issuedAt}`;
             }, {
                 headers: {
                     'pr0d-app-id': appId,
-                    'Authorization': `Bearer ${accessToken}`
+                    'authorization': `Bearer ${accessToken}`
                 }
             });
             getUser();
@@ -1903,14 +1460,13 @@ Issued At: ${components.issuedAt}`;
             const res = await axios.delete(`${baseUrl}/api/wallet/delete`, {
                 headers: {
                     'pr0d-app-id': appId,
-                    'Authorization': `Bearer ${accessToken}`
+                    'authorization': `Bearer ${accessToken}`
                 },
                 data: { address: walletAddress }
             });
-            
+
             // If the wallet being unlinked is currently connected, disconnect it
             if (isConnected && address && walletAddress.toLowerCase() === address.toLowerCase()) {
-                console.log('Disconnecting wallet after unlinking:', walletAddress);
                 disconnect();
                 // Reset wallet auth state to prevent issues with future connections
                 setWalletAuthCompleted(false);
@@ -1919,7 +1475,7 @@ Issued At: ${components.issuedAt}`;
                 setConnectingWallet(null);
                 setWalletError(null);
             }
-            
+
             getUser();
         } catch (e: any) {
             throw new Error(e.response?.data?.message || 'Failed to unlink wallet');
@@ -1939,21 +1495,8 @@ Issued At: ${components.issuedAt}`;
         return linkProvider('x');
     };
 
-    // Helper function to convert base64url to Uint8Array
-    const base64urlToUint8Array = (base64url: string): Uint8Array => {
-        const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
-        const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
-        const binary = atob(padded);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-            bytes[i] = binary.charCodeAt(i);
-        }
-        return bytes;
-    };
-
     // Helper function to format passkey options for WebAuthn API
     const formatPasskeyOptions = (options: any) => {
-        console.log('Formatting passkey options:', options);
 
         if (!options) {
             throw new Error('Options is undefined');
@@ -2076,8 +1619,8 @@ Issued At: ${components.issuedAt}`;
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'PR0D-APP-ID': appId,
-                ...(accessToken && { 'Authorization': `Bearer ${accessToken}` })
+                'pr0d-app-id': appId,
+                ...(accessToken && { 'authorization': `Bearer ${accessToken}` })
             },
             body: JSON.stringify(body)
         });
@@ -2088,7 +1631,6 @@ Issued At: ${components.issuedAt}`;
         }
 
         const data = await response.json();
-        console.log('Backend response data:', data);
 
         // The backend wraps the response in a data object
         const responseData = data.data || data;
@@ -2098,38 +1640,6 @@ Issued At: ${components.issuedAt}`;
         };
     };
 
-    // Helper function to detect device name from user agent
-    const getDeviceName = (): string => {
-        const userAgent = navigator.userAgent;
-
-        // Detect OS
-        let os = '';
-        if (userAgent.includes('Windows')) os = 'Windows';
-        else if (userAgent.includes('Mac OS X')) os = 'macOS';
-        else if (userAgent.includes('iPhone')) os = 'iOS';
-        else if (userAgent.includes('iPad')) os = 'iPadOS';
-        else if (userAgent.includes('Android')) os = 'Android';
-        else if (userAgent.includes('Linux')) os = 'Linux';
-
-        // Detect browser
-        let browser = '';
-        if (userAgent.includes('Chrome') && !userAgent.includes('Edge')) browser = 'Chrome';
-        else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) browser = 'Safari';
-        else if (userAgent.includes('Firefox')) browser = 'Firefox';
-        else if (userAgent.includes('Edge')) browser = 'Edge';
-
-        // Combine for a readable device name
-        if (os && browser) {
-            return `${browser} on ${os}`;
-        } else if (os) {
-            return os;
-        } else if (browser) {
-            return browser;
-        } else {
-            return 'Unknown Device';
-        }
-    };
-
     const verifyPasskey = async (credential: any): Promise<{ type: 'registration' | 'authentication'; user?: User; accessToken?: string; refreshToken?: string; message: string }> => {
         const deviceName = getDeviceName();
 
@@ -2137,8 +1647,8 @@ Issued At: ${components.issuedAt}`;
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'PR0D-APP-ID': appId,
-                ...(accessToken && { 'Authorization': `Bearer ${accessToken}` })
+                'pr0d-app-id': appId,
+                ...(accessToken && { 'authorization': `Bearer ${accessToken}` })
             },
             body: JSON.stringify({
                 credential,
@@ -2152,7 +1662,6 @@ Issued At: ${components.issuedAt}`;
         }
 
         const data = await response.json();
-        console.log('Verify passkey response:', data);
 
         // The backend wraps the response in a data object
         const responseData = data.data || data;
@@ -2163,7 +1672,7 @@ Issued At: ${components.issuedAt}`;
             closePopup();
         }
 
-        if(responseData.type === 'registration') {
+        if (responseData.type === 'registration') {
             getUser();
             closePopup();
         }
@@ -2186,8 +1695,8 @@ Issued At: ${components.issuedAt}`;
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                'PR0D-APP-ID': appId,
-                'Authorization': `Bearer ${accessToken}`
+                'pr0d-app-id': appId,
+                'authorization': `Bearer ${accessToken}`
             }
         });
 
@@ -2212,8 +1721,8 @@ Issued At: ${components.issuedAt}`;
             method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json',
-                'PR0D-APP-ID': appId,
-                'Authorization': `Bearer ${accessToken}`
+                'pr0d-app-id': appId,
+                'authorization': `Bearer ${accessToken}`
             },
             body: JSON.stringify({ credentialId })
         });
@@ -2236,8 +1745,8 @@ Issued At: ${components.issuedAt}`;
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                'PR0D-APP-ID': appId,
-                'Authorization': `Bearer ${tokenToUse}`
+                'pr0d-app-id': appId,
+                'authorization': `Bearer ${tokenToUse}`
             }
         });
 
@@ -2262,8 +1771,8 @@ Issued At: ${components.issuedAt}`;
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${accessToken}`,
-                    'PR0D-APP-ID': appId
+                    'authorization': `Bearer ${accessToken}`,
+                    'pr0d-app-id': appId
                 },
                 body: JSON.stringify({ message })
             });
@@ -2291,8 +1800,8 @@ Issued At: ${components.issuedAt}`;
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${accessToken}`,
-                    'PR0D-APP-ID': appId
+                    'authorization': `Bearer ${accessToken}`,
+                    'pr0d-app-id': appId
                 },
                 body: JSON.stringify(txData)
             });
@@ -2316,7 +1825,7 @@ Issued At: ${components.issuedAt}`;
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    'PR0D-APP-ID': appId
+                    'pr0d-app-id': appId
                 }
             });
 
@@ -2339,7 +1848,7 @@ Issued At: ${components.issuedAt}`;
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'PR0D-APP-ID': appId
+                    'pr0d-app-id': appId
                 },
                 body: JSON.stringify({ sponsorPrivateKey, rpcUrl, nonce })
             });
@@ -2367,8 +1876,8 @@ Issued At: ${components.issuedAt}`;
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${accessToken}`,
-                    'PR0D-APP-ID': appId
+                    'authorization': `Bearer ${accessToken}`,
+                    'pr0d-app-id': appId
                 }
             });
 
@@ -2389,6 +1898,7 @@ Issued At: ${components.issuedAt}`;
         accessToken,
         isAuthenticated: !!accessToken,
         user,
+        ready,
         logout,
         login,
         triggerMfaSetup,
@@ -2607,7 +2117,7 @@ Issued At: ${components.issuedAt}`;
                                             </>
                                         )}
                                     </FocusableButton>
-                                    
+
 
                                     {appConfig?.options?.allowPasskeys && (
                                         <FocusableButton
@@ -2764,12 +2274,12 @@ Issued At: ${components.issuedAt}`;
                                                 animation: 'pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) 0.5s infinite'
                                             }} />
                                             {/* Material UI Fingerprint Icon */}
-                                            <FingerprintIcon 
+                                            <FingerprintIcon
                                                 style={{
                                                     fontSize: 48,
                                                     color: appConfig?.accent || '#007bff',
                                                     animation: 'fingerprint-pulse 1.5s ease-in-out infinite alternate'
-                                                }} 
+                                                }}
                                             />
                                         </div>
                                     </div>
@@ -3055,7 +2565,7 @@ Issued At: ${components.issuedAt}`;
                                                     ) : (
                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                                                             <span>Passkey</span>
-                                                            <KeyboardArrowRightIcon/>
+                                                            <KeyboardArrowRightIcon />
                                                         </div>
                                                     )}
                                                 </FocusableButton>
@@ -3090,7 +2600,7 @@ Issued At: ${components.issuedAt}`;
                                                     ) : (
                                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                                                             <span>Continue with Wallet</span>
-                                                            <KeyboardArrowRightIcon/>
+                                                            <KeyboardArrowRightIcon />
                                                         </div>
                                                     )}
                                                 </FocusableButton>
@@ -3264,7 +2774,7 @@ Issued At: ${components.issuedAt}`;
                                         )}
                                     </div>
 
-                                    
+
                                 </>
                             ) : showPopup.view === 'oauth-error' && oauthError ? (
                                 <div style={styles.oauthErrorContainer}>
@@ -3484,7 +2994,7 @@ Issued At: ${components.issuedAt}`;
                                                                                 if (dummyWindow2) dummyWindow2.close();
                                                                             }, 100);
                                                                         }
-                                                                        console.log('Wallet connection stabilization period completed');
+
                                                                     }, 3000);
                                                                 }
                                                             }
@@ -3611,12 +3121,12 @@ Issued At: ${components.issuedAt}`;
                                     <div style={styles.passkeyLoadingIcon}>
                                         <div style={styles.passkeyDualIcons}>
                                             {/* FontAwesome Fingerprint Icon */}
-                                            <FingerprintIcon 
+                                            <FingerprintIcon
                                                 style={{
                                                     ...styles.passkeyBiometricIcon,
                                                     color: appConfig?.accent || '#007bff',
                                                     fontSize: 48
-                                                }} 
+                                                }}
                                             />
 
                                         </div>
@@ -3657,12 +3167,12 @@ Issued At: ${components.issuedAt}`;
                                                 animation: 'pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) 0.5s infinite'
                                             }} />
                                             {/* Material UI Fingerprint Icon */}
-                                            <FingerprintIcon 
+                                            <FingerprintIcon
                                                 style={{
                                                     fontSize: 48,
                                                     color: appConfig?.accent || '#007bff',
                                                     animation: 'fingerprint-pulse 1.5s ease-in-out infinite alternate'
-                                                }} 
+                                                }}
                                             />
                                         </div>
                                     </div>
@@ -3676,13 +3186,13 @@ Issued At: ${components.issuedAt}`;
                             ) : showPopup.view === 'passkey-error' && passkeyError ? (
                                 <div style={styles.passkeyErrorContainer}>
                                     <div style={styles.passkeyErrorIcon}>
-                                        <FingerprintIcon 
-                                                style={{
-                                                    fontSize: 48,
-                                                    color: '#dc3545',
-                                                    animation: 'fingerprint-pulse 1.5s ease-in-out infinite alternate'
-                                                }} 
-                                            />
+                                        <FingerprintIcon
+                                            style={{
+                                                fontSize: 48,
+                                                color: '#dc3545',
+                                                animation: 'fingerprint-pulse 1.5s ease-in-out infinite alternate'
+                                            }}
+                                        />
                                     </div>
                                     <h3 style={styles.passkeyErrorTitle}>
                                         Passkey Authentication Failed
@@ -3724,1171 +3234,8 @@ Issued At: ${components.issuedAt}`;
     );
 };
 
-// Utility function to determine if a color is light or dark
-const isLightColor = (hexColor: string): boolean => {
-    // Remove # if present
-    const hex = hexColor.replace('#', '');
-
-    // Convert to RGB
-    const r = parseInt(hex.substr(0, 2), 16);
-    const g = parseInt(hex.substr(2, 2), 16);
-    const b = parseInt(hex.substr(4, 2), 16);
-
-    // Calculate relative luminance using WCAG formula
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
-    // Return true if light (luminance > 0.5)
-    return luminance > 0.5;
-};
-
-// Get appropriate text color based on background
-const getTextColor = (backgroundColor: string): string => {
-    return isLightColor(backgroundColor) ? '#000000' : '#ffffff';
-};
-
-// Get appropriate secondary text color based on background
-const getSecondaryTextColor = (backgroundColor: string): string => {
-    return isLightColor(backgroundColor) ? '#666666' : '#cccccc';
-};
-
-// Get light accent color for badges
-const getLightAccentColor = (accentColor: string): string => {
-    if (!accentColor || accentColor === '#ffffff') return 'rgba(32, 201, 151, 0.1)'; // Default light green
-
-    // Remove # if present
-    const hex = accentColor.replace('#', '');
-
-    // Convert to RGB
-    const r = parseInt(hex.substr(0, 2), 16);
-    const g = parseInt(hex.substr(2, 2), 16);
-    const b = parseInt(hex.substr(4, 2), 16);
-
-    // Return rgba with low opacity for light background
-    return `rgba(${r}, ${g}, ${b}, 0.1)`;
-};
-
-const getStyles = (appConfig: AppConfig | null): Record<string, React.CSSProperties> => {
-    const backgroundColor = appConfig?.background || '#ffffff';
-    const textColor = getTextColor(backgroundColor);
-    const secondaryTextColor = getSecondaryTextColor(backgroundColor);
-    
-    // Detect mobile screens (including all iPhones) 
-    const isSmallScreen = typeof window !== 'undefined' && window.innerWidth <= 430;
-
-    // Add CSS keyframes and button protection styles
-    const styleElement = document.createElement('style');
-    styleElement.textContent = `
-        @keyframes pulse-ring {
-            0% {
-                transform: scale(0.8);
-                opacity: 0.8;
-            }
-            50% {
-                transform: scale(1.2);
-                opacity: 0.3;
-            }
-            100% {
-                transform: scale(1.4);
-                opacity: 0;
-            }
-        }
-        
-        @keyframes fingerprint-pulse {
-            0% {
-                opacity: 0.7;
-                transform: scale(1);
-            }
-            100% {
-                opacity: 1;
-                transform: scale(1.05);
-            }
-        }
-        
-        /* High specificity protection for close button */
-        button[data-pr0d-close="true"][data-pr0d-close] {
-            position: absolute !important;
-            top: 12px !important;
-            right: 12px !important;
-            border: none !important;
-            width: 28px !important;
-            height: 28px !important;
-            border-radius: 50% !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            cursor: pointer !important;
-            font-size: 18px !important;
-            line-height: 1 !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            outline: none !important;
-            text-decoration: none !important;
-            box-shadow: none !important;
-            min-width: auto !important;
-            min-height: auto !important;
-            max-width: none !important;
-            max-height: none !important;
-            font-family: inherit !important;
-            transition: background-color 0.2s ease !important;
-        }
-        
-        /* High specificity protection for back button */
-        button[data-pr0d-back="true"][data-pr0d-back] {
-            position: absolute !important;
-            top: 12px !important;
-            left: 12px !important;
-            border: none !important;
-            width: 28px !important;
-            height: 28px !important;
-            border-radius: 50% !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            cursor: pointer !important;
-            font-size: 18px !important;
-            font-weight: bold !important;
-            line-height: 1 !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            outline: none !important;
-            text-decoration: none !important;
-            box-shadow: none !important;
-            min-width: auto !important;
-            min-height: auto !important;
-            max-width: none !important;
-            max-height: none !important;
-            font-family: inherit !important;
-            transition: background-color 0.2s ease !important;
-        }
-    `;
-    if (!document.head.querySelector('style[data-pr0d-styles]')) {
-        styleElement.setAttribute('data-pr0d-styles', 'true');
-        document.head.appendChild(styleElement);
-    }
-
-    return {
-        overlay: {
-            position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-            backdropFilter: 'blur(3px)',
-            WebkitBackdropFilter: 'blur(3px)', // Safari support
-            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-            display: 'flex', justifyContent: 'center', alignItems: 'center',
-            zIndex: 9999,
-            opacity: 1,
-            transition: 'opacity 0.3s ease-out'
-        },
-        modal: {
-            backgroundColor: backgroundColor, borderRadius: 16, padding: 24, width: 320, textAlign: 'center', position: 'relative',
-            transform: 'translateY(0)',
-            transition: 'all 0.3s ease-out',
-            color: textColor,
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", "SF Pro Display", Roboto, "Helvetica Neue", Arial, sans-serif',
-            WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale'
-        },
-        close: {
-            position: 'absolute',
-            top: 12,
-            right: 12,
-            border: 'none',
-            background: isLightColor(backgroundColor) ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.1)',
-            fontSize: 18,
-            cursor: 'pointer',
-            width: 28,
-            height: 28,
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'background-color 0.2s ease',
-            color: secondaryTextColor
-        },
-        logo: {
-            width: 64, height: 64, borderRadius: 16, margin: '20px auto 24px'
-        },
-        logoImage: {
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            borderRadius: 16
-        },
-        emailIconContainer: {
-            width: 48,
-            height: 48,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 12px auto'
-        },
-        emailIconLarge: {
-            width: 40,
-            height: 40
-        },
-        title: {
-            fontSize: 18, fontWeight: 500, marginBottom: 8, color: textColor
-        },
-        inputContainer: {
-            position: 'relative',
-            width: '100%',
-            marginBottom: 16
-        },
-        inputIcon: {
-            position: 'absolute',
-            left: 16,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            width: 16,
-            height: 16,
-            pointerEvents: 'none',
-            zIndex: 1
-        },
-        inputField: {
-            width: '100%',
-            padding: '14px 80px 14px 44px',
-            fontSize: 15,
-            border: `1px solid ${isLightColor(backgroundColor) ? '#e5e7eb' : '#636363'}`,
-            borderRadius: 12,
-            outline: 'none',
-            transition: 'border-color 0.2s ease, background-color 5000s ease-in-out 0s',
-            boxSizing: 'border-box',
-            fontWeight: 400,
-            color: textColor,
-            backgroundColor: 'transparent',
-            boxShadow: `inset 0 0 0 1000px transparent, ${isLightColor(backgroundColor) ? '0 1px 2px rgba(0, 0, 0, 0.05)' : '0 1px 2px rgba(255, 255, 255, 0.05)'}`,
-            WebkitBoxShadow: `inset 0 0 0 1000px transparent, ${isLightColor(backgroundColor) ? '0 1px 2px rgba(0, 0, 0, 0.05)' : '0 1px 2px rgba(255, 255, 255, 0.05)'}`,
-            WebkitTextFillColor: textColor
-        },
-        inputSubmitButton: {
-            position: 'absolute',
-            right: 8,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            background: 'transparent',
-            border: 'none',
-            color: '#000',
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: 'pointer',
-            padding: '4px 8px',
-            borderRadius: 4,
-            transition: 'all 0.2s ease',
-            opacity: 1
-        },
-        input: {
-            width: '100%',
-            padding: 12,
-            fontSize: 14,
-            marginBottom: 16,
-            border: `1px solid ${isLightColor(backgroundColor) ? '#e5e7eb' : '#636363'}`,
-            borderRadius: 8,
-            outline: 'none',
-            transition: 'border-color 0.2s ease',
-            boxSizing: 'border-box',
-            backgroundColor: 'transparent',
-            color: textColor
-        },
-        submit: {
-            width: '100%', padding: 10, fontSize: 14, marginBottom: 12, backgroundColor: '#000', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', transition: 'background-color 0.2s ease', fontWeight: 600
-        },
-        altButton: {
-            width: '100%',
-            padding: '14px 16px',
-            marginBottom: 12,
-            backgroundColor: 'transparent',
-            borderRadius: 12,
-            border: `1px solid ${isLightColor(backgroundColor) ? '#e5e7eb' : '#636363'}`,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-start',
-            gap: 12,
-            fontSize: 15,
-            fontWeight: 500,
-            color: textColor,
-            boxShadow: isLightColor(backgroundColor) ? '0 1px 2px rgba(0, 0, 0, 0.05)' : '0 1px 2px rgba(255, 255, 255, 0.05)',
-            transition: 'all 0.2s ease'
-        },
-        error: {
-            color: 'red', marginBottom: 10, fontSize: 14
-        },
-        codeText: {
-            fontSize: 14, marginBottom: 16, color: textColor
-        },
-        backButton: {
-            background: 'transparent', border: 'none', color: '#555', textDecoration: 'underline', cursor: 'pointer', marginTop: 10
-        },
-        codeContainer: {
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginBottom: 16,
-            gap: isSmallScreen ? '4px' : '8px',
-            maxWidth: '100%'
-        },
-        codeInput: {
-            width: isSmallScreen ? 'calc((100% - 20px) / 6)' : 40,
-            height: isSmallScreen ? 44 : 48,
-            fontSize: isSmallScreen ? 18 : 20,
-            textAlign: 'center',
-            border: `1px solid ${isLightColor(backgroundColor) ? '#e5e7eb' : '#636363'}`,
-            borderRadius: isSmallScreen ? 6 : 8,
-            margin: 0,
-            backgroundColor: 'transparent',
-            color: textColor,
-            minWidth: isSmallScreen ? 0 : 40,
-            maxWidth: isSmallScreen ? 'none' : 48,
-            boxSizing: 'border-box'
-        },
-        orSeparator: {
-            textAlign: 'center',
-            margin: '16px 0',
-            fontSize: 14,
-            color: '#888'
-        },
-        mfaContainer: {
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '100%'
-        },
-        verifyButton: {
-            marginTop: 20,
-            padding: '10px 20px',
-            backgroundColor: '#007bff',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 8,
-            cursor: 'pointer'
-        },
-        qrCodeContainer: {
-            display: 'flex',
-            justifyContent: 'center',
-            marginBottom: 16,
-            borderRadius: 16,
-            border: '2px solid #000000',
-            padding: 8,
-            backgroundColor: '#ffffff'
-        },
-        qrCode: {
-            width: 200,
-            height: 200,
-            marginBottom: 16,
-            borderRadius: 16,
-            border: '2px solid #e5e7eb',
-            padding: 8
-        },
-        mfaTitle: {
-            fontSize: 18,
-            fontWeight: 500,
-            marginBottom: 16
-        },
-        mfaInstruction: {
-            fontSize: 14,
-            marginBottom: 20,
-            textAlign: 'center',
-            lineHeight: 1.4
-        },
-        continueButton: {
-            marginTop: 20,
-            padding: '10px 20px',
-            backgroundColor: '#007bff',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 8,
-            cursor: 'pointer'
-        },
-        copyButton: {
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            fontSize: 14,
-            fontWeight: 500,
-            color: secondaryTextColor,
-            padding: '8px 0',
-            marginBottom: 12
-        },
-        copyIcon: {
-            width: 16,
-            height: 16,
-            flexShrink: 0
-        },
-        providerIcon: {
-            width: 16,
-            height: 16,
-            flexShrink: 0
-        },
-        backArrow: {
-            position: 'absolute',
-            top: 12,
-            left: 12,
-            border: 'none',
-            background: isLightColor(backgroundColor) ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.1)',
-            fontSize: 18,
-            cursor: 'pointer',
-            color: secondaryTextColor,
-            fontWeight: 'bold',
-            width: 28,
-            height: 28,
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'background-color 0.2s ease'
-        },
-        shieldIcon: {
-            display: 'flex',
-            justifyContent: 'center',
-            marginBottom: 16
-        },
-        subtitle: {
-            fontSize: 14,
-            color: '#666',
-            marginBottom: 32,
-            textAlign: 'center',
-            lineHeight: 1.4
-        },
-        methodContainer: {
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12,
-            width: '100%'
-        },
-        methodButton: {
-            width: '100%',
-            padding: 16,
-            backgroundColor: '#f8f9fa',
-            border: '1px solid #e9ecef',
-            borderRadius: 8,
-            cursor: 'pointer',
-            transition: 'all 0.2s ease'
-        },
-        methodButtonDisabled: {
-            cursor: 'not-allowed',
-            opacity: 0.6
-        },
-        methodButtonContent: {
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12
-        },
-        methodIcon: {
-            width: 24,
-            height: 24,
-            flexShrink: 0
-        },
-        methodText: {
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-start',
-            flex: 1
-        },
-        methodTitle: {
-            fontSize: 16,
-            fontWeight: 500,
-            color: '#333'
-        },
-        recommendedBadgeRight: {
-            fontSize: 12,
-            fontWeight: 500,
-            color: appConfig?.accent || '#20c997',
-            backgroundColor: getLightAccentColor(appConfig?.accent || '#20c997'),
-            padding: '2px 6px',
-            borderRadius: 4,
-            marginLeft: 'auto'
-        },
-        arrowIcon: {
-            width: 20,
-            height: 20,
-            flexShrink: 0
-        },
-        qrCodeWrapper: {
-            borderRadius: 8,
-            overflow: 'hidden'
-        },
-        qrCodeSvg: {
-            borderRadius: 8
-        },
-        providerLinkContainer: {
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12,
-            width: '100%',
-            marginBottom: 24
-        },
-        providerLinkButton: {
-            width: '100%',
-            padding: 12,
-            backgroundColor: '#f8f9fa',
-            border: '1px solid #e9ecef',
-            borderRadius: 8,
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            fontSize: 14,
-            fontWeight: 500
-        },
-        checkIcon: {
-            width: 16,
-            height: 16,
-        },
-        passkeyIcon: {
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginBottom: 16
-        },
-        passkeySpinner: {
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginTop: 16
-        },
-        successIcon: {
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginBottom: 16
-        },
-        linkedAccountsSection: {
-            borderTop: '1px solid #e9ecef',
-            paddingTop: 16,
-            marginTop: 16
-        },
-        linkedAccountsTitle: {
-            fontSize: 14,
-            fontWeight: 600,
-            marginBottom: 12,
-            color: '#333'
-        },
-        noLinkedAccounts: {
-            fontSize: 14,
-            color: '#666',
-            fontStyle: 'italic',
-            textAlign: 'center',
-            margin: 0
-        },
-        linkedAccountsList: {
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8
-        },
-        linkedAccount: {
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            padding: 8,
-            backgroundColor: '#f8f9fa',
-            borderRadius: 6,
-            fontSize: 14
-        },
-        oauthErrorContainer: {
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            padding: '20px 0'
-        },
-        oauthErrorIcon: {
-            position: 'relative',
-            marginBottom: 20
-        },
-        providerIconLarge: {
-            width: 64,
-            height: 64,
-            borderRadius: '50%',
-            padding: 12,
-            border: '3px solid #dc3545'
-        },
-        providerIconLoading: {
-            width: 64,
-            height: 64,
-            borderRadius: '50%',
-            padding: 12
-        },
-        errorCircle: {
-            position: 'absolute',
-            bottom: -4,
-            right: -4,
-            width: 24,
-            height: 24,
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: '2px solid #dc3545'
-        },
-        errorIcon: {
-            width: 14,
-            height: 14
-        },
-        oauthErrorTitle: {
-            fontSize: 18,
-            fontWeight: 600,
-            color: '#333',
-            margin: '0 0 8px 0'
-        },
-        oauthErrorMessage: {
-            fontSize: 14,
-            color: '#666',
-            margin: '0 0 24px 0',
-            lineHeight: 1.4
-        },
-        oauthLoadingContainer: {
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            padding: '20px 0'
-        },
-        oauthLoadingIcon: {
-            position: 'relative',
-            marginBottom: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-        },
-        loadingCircle: {
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: 88,
-            height: 88,
-            border: '3px solid #e3f2fd',
-            borderTop: '3px solid #20c997',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite'
-        },
-        oauthLoadingTitle: {
-            fontSize: 18,
-            fontWeight: 500,
-            color: textColor,
-            margin: '0 0 8px 0'
-        },
-        oauthLoadingMessage: {
-            fontSize: 14,
-            color: secondaryTextColor,
-            margin: 0,
-            lineHeight: 1.4
-        },
-        passkeyLoadingContainer: {
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            padding: '20px 0'
-        },
-        passkeyLoadingIcon: {
-            marginBottom: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-        },
-        passkeyLoadingTitle: {
-            fontSize: 18,
-            fontWeight: 500,
-            color: textColor,
-            margin: '0 0 8px 0'
-        },
-        passkeyLoadingMessage: {
-            fontSize: 14,
-            color: secondaryTextColor,
-            margin: 0,
-            lineHeight: 1.4
-        },
-        passkeyDualIcons: {
-            display: 'flex',
-            alignItems: 'center',
-            gap: 16,
-            justifyContent: 'center'
-        },
-        passkeyBiometricIcon: {
-            flexShrink: 0
-        },
-        passkeyOrText: {
-            fontSize: 12,
-            color: secondaryTextColor,
-            fontWeight: 500,
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px'
-        },
-        passkeySigningContainer: {
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            padding: '20px 0'
-        },
-        passkeySigningIcon: {
-            marginBottom: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-        },
-        passkeySigningTitle: {
-            fontSize: 18,
-            fontWeight: 500,
-            color: textColor,
-            margin: '0 0 8px 0'
-        },
-        passkeySigningMessage: {
-            fontSize: 14,
-            color: secondaryTextColor,
-            margin: 0,
-            lineHeight: 1.4
-        },
-        passkeyErrorContainer: {
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            padding: '20px 0'
-        },
-        passkeyErrorIcon: {
-            marginBottom: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-        },
-        passkeyErrorTitle: {
-            fontSize: 18,
-            fontWeight: 500,
-            color: textColor,
-            margin: '0 0 8px 0'
-        },
-        passkeyErrorMessage: {
-            fontSize: 14,
-            color: secondaryTextColor,
-            margin: '0 0 16px 0',
-            lineHeight: 1.4
-        },
-        passkeyErrorButtons: {
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8
-        },
-        retryButton: {
-            width: '100%',
-            padding: '14px 16px',
-            fontSize: 15,
-            fontWeight: 500,
-            borderRadius: 12,
-            border: 'none',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease'
-        },
-        walletContainer: {
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            padding: '0'
-        },
-        walletListContainer: {
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 0,
-            width: '100%'
-        },
-        walletListButton: {
-            width: '100%',
-            padding: '12px 16px',
-            backgroundColor: '#ffffff',
-            border: '1px solid #e9ecef',
-            borderRadius: 8,
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            display: 'flex',
-            alignItems: 'center',
-            textAlign: 'left'
-        },
-        walletListContent: {
-            display: 'flex',
-            alignItems: 'center',
-            width: '100%',
-            gap: 12
-        },
-        walletIconContainer: {
-            width: 40,
-            height: 40,
-            borderRadius: 8,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0
-        },
-        walletListIcon: {
-            width: 24,
-            height: 24
-        },
-        walletListName: {
-            fontSize: 16,
-            fontWeight: 500,
-            color: textColor,
-            flex: 1
-        },
-        walletListStatus: {
-            marginLeft: 'auto'
-        },
-        statusBadgeBlue: {
-            fontSize: 11,
-            fontWeight: 600,
-            color: '#3B99FC',
-            backgroundColor: 'transparent',
-            padding: '4px 8px',
-            borderRadius: 4,
-            letterSpacing: '0.5px'
-        },
-        statusBadgeInstalled: {
-            fontSize: 11,
-            fontWeight: 600,
-            color: '#4CAF50',
-            backgroundColor: 'transparent',
-            padding: '4px 8px',
-            borderRadius: 4,
-            letterSpacing: '0.5px'
-        },
-        // statusBadgeNotInstalled: {
-        //     fontSize: 11,
-        //     fontWeight: 600,
-        //     color: '#666',
-        //     backgroundColor: '#f5f5f5',
-        //     padding: '4px 8px',
-        //     borderRadius: 4,
-        //     letterSpacing: '0.5px'
-        // },
-        walletDivider: {
-            textAlign: 'center',
-            margin: '16px 0',
-            fontSize: 14,
-            color: '#888',
-            position: 'relative'
-        },
-        getStartedSection: {
-            textAlign: 'center',
-            marginTop: 8
-        },
-        getStartedText: {
-            fontSize: 14,
-            color: secondaryTextColor
-        },
-        getStartedLink: {
-            fontSize: 14,
-            color: '#007bff',
-            textDecoration: 'none',
-            fontWeight: 500
-        },
-        walletButton: {
-            width: '100%',
-            padding: 16,
-            border: '1px solid #e9ecef',
-            borderRadius: 8,
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            display: 'flex',
-            alignItems: 'center'
-        },
-        walletButtonContent: {
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            width: '100%'
-        },
-        walletInfo: {
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12
-        },
-        walletName: {
-            fontSize: 16,
-            fontWeight: 500,
-            color: textColor
-        },
-        noWalletsMessage: {
-            padding: 16,
-            backgroundColor: '#f8f9fa',
-            borderRadius: 8,
-            border: '1px solid #e9ecef',
-            textAlign: 'center'
-        },
-        walletConnectingContainer: {
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            margin: '20px 0'
-        },
-        walletConnectingIcon: {
-            position: 'relative',
-            marginBottom: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-        },
-        walletIconPlaceholder: {
-            width: 64,
-            height: 64,
-            borderRadius: '50%',
-            backgroundColor: '#f8f9fa',
-            border: '3px solid #20c997',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-        },
-        walletIconSvg: {
-            width: 32,
-            height: 32,
-            color: secondaryTextColor
-        },
-        walletConnectingLogo: {
-            width: 32,
-            height: 32,
-            borderRadius: 4
-        },
-        walletConnectingMessage: {
-            fontSize: 14,
-            color: secondaryTextColor,
-            margin: 0,
-            lineHeight: 1.4
-        },
-        walletConnectingTitle: {
-            fontSize: 18,
-            fontWeight: 500,
-            color: textColor,
-            margin: '0 0 20px 0'
-        },
-        walletSuccessContainer: {
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            padding: '20px 0'
-        },
-        walletSuccessIcon: {
-            marginBottom: 20
-        },
-        checkIconLarge: {
-            width: 64,
-            height: 64
-        },
-        walletSuccessMessage: {
-            fontSize: 16,
-            fontWeight: 500,
-            color: '#333',
-            margin: '0 0 8px 0'
-        },
-        walletSuccessSubMessage: {
-            fontSize: 14,
-            color: '#666',
-            margin: 0,
-            fontFamily: 'monospace'
-        },
-        walletGeneratingChallenge: {
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 16,
-            fontSize: 14,
-            color: '#666'
-        },
-        walletSuccessCheckmark: {
-            position: 'absolute',
-            bottom: -4,
-            right: -4,
-            width: 24,
-            height: 24,
-            backgroundColor: 'white',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-        },
-        checkIconSmall: {
-            width: 16,
-            height: 16
-        },
-        walletIconFallback: {
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 20,
-            fontWeight: 'bold',
-            color: secondaryTextColor,
-            borderRadius: '50%'
-        },
-        walletErrorContainer: {
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            margin: '20px 0'
-        },
-        walletErrorIconContainer: {
-            marginBottom: 20
-        },
-        walletErrorIconWrapper: {
-            width: 64,
-            height: 64,
-            borderRadius: '50%',
-            border: '3px solid #dc3545',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative'
-        },
-        walletIconError: {
-            width: 32,
-            height: 32,
-            borderRadius: 4
-        },
-        walletErrorTitle: {
-            fontSize: 18,
-            fontWeight: 600,
-            color: textColor,
-            margin: '0 0 8px 0'
-        },
-        walletErrorSubtitle: {
-            fontSize: 14,
-            color: secondaryTextColor,
-            margin: '0 0 24px 0',
-            lineHeight: 1.4
-        },
-        walletRetryButton: {
-            backgroundColor: '#20c997',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 8,
-            padding: '12px 32px',
-            fontSize: 14,
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'background-color 0.2s ease'
-        },
-        walletErrorIcon: {
-            marginBottom: 20
-        },
-        errorIconLarge: {
-            width: 64,
-            height: 64
-        },
-        walletErrorMessage: {
-            fontSize: 14,
-            color: secondaryTextColor,
-            margin: '0 0 24px 0',
-            lineHeight: 1.4
-        },
-
-        walletSigningContainer: {
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            margin: '20px 0'
-        },
-        walletSigningIcon: {
-            position: 'relative',
-            marginBottom: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-        },
-        walletSigningLogo: {
-            width: 32,
-            height: 32,
-            borderRadius: 4
-        },
-        walletSigningLetter: {
-            fontSize: 24,
-            fontWeight: 600,
-            color: '#4A90E2',
-            width: 32,
-            height: 32,
-            borderRadius: 4,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-        },
-        walletSigningMessage: {
-            fontSize: 14,
-            color: secondaryTextColor,
-            margin: 0,
-            lineHeight: 1.4,
-            maxWidth: 280
-        },
-        walletSigningStatus: {
-            fontSize: 12,
-            color: '#999',
-            fontWeight: 500,
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px'
-        },
-        walletConnectQrContainer: {
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textAlign: 'center',
-            width: '100%'
-        },
-        walletConnectQrCode: {
-            marginBottom: 20,
-            padding: 16,
-            backgroundColor: '#ffffff',
-            borderRadius: 16,
-            border: '2px solid #e9ecef'
-        },
-        mobileDeepLinkButton: {
-            backgroundColor: '#20c997',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 8,
-            padding: '12px 32px',
-            fontSize: 14,
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'background-color 0.2s ease',
-            marginTop: 16,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8
-        },
-        mobileIcon: {
-            width: 16,
-            height: 16,
-            flexShrink: 0
-        },
-        walletSuccessIconContainer: {
-            position: 'relative',
-            marginBottom: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-        },
-        walletSuccessCircle: {
-            width: 64,
-            height: 64,
-            borderRadius: '50%',
-            border: '3px solid #4CAF50',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            position: 'relative'
-        }
-    };
-};
-
-// Create a QueryClient instance for React Query
 const queryClient = new QueryClient();
 
-// Wrapper component that provides all necessary providers
 const Pr0dWithProviders = ({ appId, children }: { appId: string; children: React.ReactNode }) => {
     return (
         <WagmiProvider config={config}>
@@ -4901,7 +3248,6 @@ const Pr0dWithProviders = ({ appId, children }: { appId: string; children: React
     );
 };
 
-// Named exports for better Fast Refresh compatibility
 export { Pr0dWithProviders as default };
 
 export const usePr0d = () => {

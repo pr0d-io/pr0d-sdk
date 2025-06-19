@@ -36,8 +36,6 @@ const connectors = connectorsForWallets(
   },
 );
 
-console.log(connectors)
-
 export const config = createConfig({
   connectors,
   chains,
