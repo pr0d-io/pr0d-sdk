@@ -4,7 +4,7 @@ import QRCode from 'react-qr-code';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
-import { config } from '../wagmi';
+import { config } from '../lib/wagmi';
 
 import '@rainbow-me/rainbowkit/styles.css';
 
