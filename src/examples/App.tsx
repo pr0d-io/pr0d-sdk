@@ -1,10 +1,6 @@
 import React from 'react';
 import Pr0d, { usePr0d } from '../lib/Pr0d';
 import QRCode from 'react-qr-code';
-import { WagmiProvider } from 'wagmi';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { RainbowKitProvider } from '@rainbow-me/rainbowkit';
-import { config } from '../lib/wagmi';
 
 import '@rainbow-me/rainbowkit/styles.css';
 
@@ -14,8 +10,6 @@ interface Wallet {
   first_verified_at: string;
   last_verified_at: string;
 }
-
-const queryClient = new QueryClient();
 
 // Add CSS animation for spinner
 const spinnerStyle = document.createElement('style');
@@ -1069,17 +1063,11 @@ const App = () => {
   const appId = "684dea5189269732f9817561";
   
   return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider>
-          <div style={styles.app}>
+
             <Pr0d appId={appId}>
               <AppContent />
             </Pr0d>
-          </div>
-        </RainbowKitProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
+
   );
 };
 
