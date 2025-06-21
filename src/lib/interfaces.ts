@@ -51,6 +51,8 @@ export interface AuthContextType {
     triggerProviderLink: () => void;
     triggerWalletLink: () => void;
     triggerPasskeySetup: () => void;
+    linkMFA: () => Promise<void>;
+    linkPasskey: () => void;
     setupMFA: () => Promise<{ secret: string; qrCodeUrl: string }>;
     verifyMFA: (code: string) => Promise<boolean>;
     deleteMFA: () => Promise<void>;

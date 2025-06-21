@@ -24,7 +24,7 @@ document.head.appendChild(spinnerStyle);
 // The Dashboard component that's only shown to authenticated users
 const Dashboard = () => {
   const { user, logout, getUser } = usePr0d();
-2
+  2
   const handleGetUser = async () => {
     try {
       await getUser();
@@ -33,16 +33,16 @@ const Dashboard = () => {
     }
   };
 
-  
+
   return (
     <div style={styles.dashboard}>
       <div style={styles.header}>
         <h2>Dashboard</h2>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button 
-            onClick={handleGetUser} 
-            style={{ 
-              ...styles.logoutButton, 
+          <button
+            onClick={handleGetUser}
+            style={{
+              ...styles.logoutButton,
               backgroundColor: '#4CAF50',
               marginRight: '10px'
             }}
@@ -52,7 +52,7 @@ const Dashboard = () => {
           <button onClick={logout} style={styles.logoutButton}>Logout</button>
         </div>
       </div>
-      
+
       <div style={styles.userInfo}>
         <h3>User Information</h3>
         <p><strong>User ID:</strong> {user?._id}</p>
@@ -65,10 +65,10 @@ const Dashboard = () => {
       <div style={styles.walletsManagement}>
         <h3>Wallet Management</h3>
         <p style={styles.walletManagementDescription}>
-          Connect external wallets (like MetaMask, WalletConnect, etc.) to your account for additional security and convenience. 
+          Connect external wallets (like MetaMask, WalletConnect, etc.) to your account for additional security and convenience.
           These are separate from your embedded wallet above.
         </p>
-        
+
         <WalletsSection />
         <CustomLinkWalletButton />
       </div>
@@ -88,8 +88,19 @@ const Dashboard = () => {
         </div>
       </div>
 
+      <div style={styles.linkMethodsSection}>
+        <h3>Direct Link Methods</h3>
+        <p style={styles.linkMethodsDescription}>
+          Test the new direct link methods that skip the selection step.
+        </p>
+        <div style={styles.directLinkButtons}>
+          <CustomLinkMFAButton />
+          <CustomLinkPasskeyButton />
+        </div>
+      </div>
+
       <SessionsSection />
-      
+
       {!user?.email?.email && <CustomLinkEmailButton />}
     </div>
   );
@@ -99,7 +110,7 @@ const LinkedProvidersDisplay = () => {
   const { user, unlinkProvider } = usePr0d();
   const [unlinkingProvider, setUnlinkingProvider] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  
+
   const providers = [
     { key: 'google', name: 'Google', color: '#4285F4' },
     { key: 'discord', name: 'Discord', color: '#5865F2' },
@@ -112,7 +123,7 @@ const LinkedProvidersDisplay = () => {
   const handleUnlinkProvider = async (providerKey: 'google' | 'discord' | 'x') => {
     setUnlinkingProvider(providerKey);
     setError(null);
-    
+
     try {
       await unlinkProvider(providerKey);
       // Success! The user data will be automatically updated
@@ -132,7 +143,7 @@ const LinkedProvidersDisplay = () => {
           <div style={styles.linkedProvidersList}>
             {linkedProviders.map(provider => (
               <div key={provider.key} style={styles.linkedProvider}>
-                <div 
+                <div
                   style={{
                     ...styles.providerIndicator,
                     backgroundColor: provider.color
@@ -167,16 +178,16 @@ const LinkedProvidersDisplay = () => {
 
 const CustomLinkProvidersButton = () => {
   const { triggerProviderLink, user } = usePr0d();
-  
+
   // Check if there are any providers that could potentially be linked
   // This assumes the app might support these providers - the actual availability
   // will be checked in the provider linking popup based on app config
   const hasUnlinkedProviders = !user?.google || !user?.discord || !user?.x;
-  
+
   if (!hasUnlinkedProviders) {
     return null; // Don't show button if all common providers are already linked
   }
-  
+
   return (
     <button onClick={triggerProviderLink} style={styles.customLinkProvidersButton}>
       Link Social Accounts
@@ -187,11 +198,11 @@ const CustomLinkProvidersButton = () => {
 const CustomLinkGoogleButton = () => {
   const { linkGoogle, user } = usePr0d();
   const [linking, setLinking] = React.useState(false);
-  
+
   if (user?.google) {
     return null; // Don't show if already linked
   }
-  
+
   const handleLinkGoogle = async () => {
     setLinking(true);
     try {
@@ -202,10 +213,10 @@ const CustomLinkGoogleButton = () => {
       setLinking(false);
     }
   };
-  
+
   return (
-    <button 
-      onClick={handleLinkGoogle} 
+    <button
+      onClick={handleLinkGoogle}
       disabled={linking}
       style={{
         ...styles.customLinkGoogleButton,
@@ -227,11 +238,11 @@ const CustomLinkGoogleButton = () => {
 const CustomLinkDiscordButton = () => {
   const { linkDiscord, user } = usePr0d();
   const [linking, setLinking] = React.useState(false);
-  
+
   if (user?.discord) {
     return null; // Don't show if already linked
   }
-  
+
   const handleLinkDiscord = async () => {
     setLinking(true);
     try {
@@ -242,10 +253,10 @@ const CustomLinkDiscordButton = () => {
       setLinking(false);
     }
   };
-  
+
   return (
-    <button 
-      onClick={handleLinkDiscord} 
+    <button
+      onClick={handleLinkDiscord}
       disabled={linking}
       style={{
         ...styles.customLinkDiscordButton,
@@ -267,11 +278,11 @@ const CustomLinkDiscordButton = () => {
 const CustomLinkXButton = () => {
   const { linkX, user } = usePr0d();
   const [linking, setLinking] = React.useState(false);
-  
+
   if (user?.x) {
     return null; // Don't show if already linked
   }
-  
+
   const handleLinkX = async () => {
     setLinking(true);
     try {
@@ -282,10 +293,10 @@ const CustomLinkXButton = () => {
       setLinking(false);
     }
   };
-  
+
   return (
-    <button 
-      onClick={handleLinkX} 
+    <button
+      onClick={handleLinkX}
       disabled={linking}
       style={{
         ...styles.customLinkXButton,
@@ -340,6 +351,24 @@ const CustomLinkWalletButton = () => {
   );
 };
 
+const CustomLinkMFAButton = () => {
+  const { linkMFA } = usePr0d();
+  return (
+    <button onClick={linkMFA} style={styles.customLinkMFAButton}>
+      Link MFA (Direct)
+    </button>
+  );
+};
+
+const CustomLinkPasskeyButton = () => {
+  const { linkPasskey } = usePr0d();
+  return (
+    <button onClick={linkPasskey} style={styles.customLinkPasskeyButton}>
+      Link Passkey (Direct)
+    </button>
+  );
+};
+
 const EmbeddedWalletSection = () => {
   const { user } = usePr0d();
   const [showPrivateKey, setShowPrivateKey] = React.useState(false);
@@ -368,7 +397,7 @@ const EmbeddedWalletSection = () => {
   const handleSignMessage = async () => {
     const message = prompt('Enter a message to sign:');
     if (!message) return;
-    
+
     alert('Transaction sponsorship features have been removed.');
   };
 
@@ -380,47 +409,47 @@ const EmbeddedWalletSection = () => {
     <div style={styles.walletSection}>
       <h3>Embedded Wallet</h3>
       <div style={styles.walletInfo}>
-                 <div style={styles.walletField}>
-           <label style={styles.walletLabel}>Address:</label>
-           <div style={styles.walletValueContainer}>
-             <code style={styles.walletValue}>{user.embeddedWallet.address}</code>
-             <button
-               style={styles.copyButton}
-               onClick={() => copyToClipboard(user.embeddedWallet.address, 'address')}
-               title="Copy address"
-             >
-               {copied === 'address' ? (
-                 <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#4CAF50">
-                   <path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z"/>
-                 </svg>
-               ) : (
-                 <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#666">
-                   <path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"/>
-                 </svg>
-               )}
-             </button>
-             <button
-               style={styles.qrButton}
-               onClick={() => setShowAddressQR(!showAddressQR)}
-               title={showAddressQR ? "Hide QR code" : "Show QR code"}
-             >
-               <svg style={styles.qrIcon} viewBox="0 0 24 24" fill="#666">
-                 <path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H9V11M15,11H17V13H15V11M19,5H21V9H19V5M5,5H9V9H5V5M3,3H11V11H3V3M5,5V9H9V5H5M3,13H11V21H3V13M5,15V19H9V15H5M13,3H21V11H13V3M15,5V9H19V5H15M13,13H15V15H13V13M15,15H17V17H15V15M17,13H19V15H17V13M15,17H17V19H15V17M17,17H19V19H17V17M19,13H21V21H19V13M19,15V19H21V15H19Z"/>
-               </svg>
-             </button>
-           </div>
-           {showAddressQR && (
-             <div style={styles.qrContainer}>
-               <QRCode 
-                 value={user.embeddedWallet.address}
-                 size={200}
-                 style={styles.qrCode}
-               />
-               <p style={styles.qrLabel}>Scan to add wallet address</p>
-             </div>
-           )}
-         </div>
-        
+        <div style={styles.walletField}>
+          <label style={styles.walletLabel}>Address:</label>
+          <div style={styles.walletValueContainer}>
+            <code style={styles.walletValue}>{user.embeddedWallet.address}</code>
+            <button
+              style={styles.copyButton}
+              onClick={() => copyToClipboard(user.embeddedWallet.address, 'address')}
+              title="Copy address"
+            >
+              {copied === 'address' ? (
+                <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#4CAF50">
+                  <path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
+                </svg>
+              ) : (
+                <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#666">
+                  <path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" />
+                </svg>
+              )}
+            </button>
+            <button
+              style={styles.qrButton}
+              onClick={() => setShowAddressQR(!showAddressQR)}
+              title={showAddressQR ? "Hide QR code" : "Show QR code"}
+            >
+              <svg style={styles.qrIcon} viewBox="0 0 24 24" fill="#666">
+                <path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H9V11M15,11H17V13H15V11M19,5H21V9H19V5M5,5H9V9H5V5M3,3H11V11H3V3M5,5V9H9V5H5M3,13H11V21H3V13M5,15V19H9V15H5M13,3H21V11H13V3M15,5V9H19V5H15M13,13H15V15H13V13M15,15H17V17H15V15M17,13H19V15H17V13M15,17H17V19H15V17M17,17H19V19H17V17M19,13H21V21H19V13M19,15V19H21V15H19Z" />
+              </svg>
+            </button>
+          </div>
+          {showAddressQR && (
+            <div style={styles.qrContainer}>
+              <QRCode
+                value={user.embeddedWallet.address}
+                size={200}
+                style={styles.qrCode}
+              />
+              <p style={styles.qrLabel}>Scan to add wallet address</p>
+            </div>
+          )}
+        </div>
+
         <div style={styles.walletField}>
           <label style={styles.walletLabel}>Private Key:</label>
           <div style={styles.walletValueContainer}>
@@ -434,71 +463,71 @@ const EmbeddedWalletSection = () => {
             >
               {showPrivateKey ? (
                 <svg style={styles.eyeIcon} viewBox="0 0 24 24" fill="#666">
-                  <path d="M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.09L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.76,7.13 11.37,7 12,7Z"/>
+                  <path d="M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.09L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.76,7.13 11.37,7 12,7Z" />
                 </svg>
               ) : (
                 <svg style={styles.eyeIcon} viewBox="0 0 24 24" fill="#666">
-                  <path d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z"/>
+                  <path d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z" />
                 </svg>
               )}
             </button>
-                         {showPrivateKey && (
-               <>
-                 <button
-                   style={styles.copyButton}
-                   onClick={() => copyToClipboard(user.embeddedWallet.privateKey, 'privateKey')}
-                   title="Copy private key"
-                 >
-                   {copied === 'privateKey' ? (
-                     <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#4CAF50">
-                       <path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z"/>
-                     </svg>
-                   ) : (
-                     <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#666">
-                       <path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"/>
-                     </svg>
-                   )}
-                 </button>
-                 <button
-                   style={styles.qrButton}
-                   onClick={() => setShowPrivateKeyQR(!showPrivateKeyQR)}
-                   title={showPrivateKeyQR ? "Hide private key QR code" : "Show private key QR code"}
-                 >
-                   <svg style={styles.qrIcon} viewBox="0 0 24 24" fill="#666">
-                     <path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H9V11M15,11H17V13H15V11M19,5H21V9H19V5M5,5H9V9H5V5M3,3H11V11H3V3M5,5V9H9V5H5M3,13H11V21H3V13M5,15V19H9V15H5M13,3H21V11H13V3M15,5V9H19V5H15M13,13H15V15H13V13M15,15H17V17H15V15M17,13H19V15H17V13M15,17H17V19H15V17M17,17H19V19H17V17M19,13H21V21H19V13M19,15V19H21V15H19Z"/>
-                   </svg>
-                 </button>
-               </>
-             )}
-                     </div>
-           {showPrivateKeyQR && showPrivateKey && (
-             <div style={styles.qrContainer}>
-               <QRCode 
-                 value={user.embeddedWallet.privateKey}
-                 size={200}
-                 style={styles.qrCode}
-               />
-               <p style={styles.qrLabel}>Scan to import private key</p>
-               <div style={styles.privateKeyWarning}>
-                 <svg style={styles.warningIcon} viewBox="0 0 24 24" fill="#dc3545">
-                   <path d="M1,21H23L12,2M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16"/>
-                 </svg>
-                 <span>DANGER: This QR contains your private key. Only scan with trusted devices.</span>
-               </div>
-             </div>
-           )}
-         </div>
-       </div>
+            {showPrivateKey && (
+              <>
+                <button
+                  style={styles.copyButton}
+                  onClick={() => copyToClipboard(user.embeddedWallet.privateKey, 'privateKey')}
+                  title="Copy private key"
+                >
+                  {copied === 'privateKey' ? (
+                    <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#4CAF50">
+                      <path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
+                    </svg>
+                  ) : (
+                    <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#666">
+                      <path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  style={styles.qrButton}
+                  onClick={() => setShowPrivateKeyQR(!showPrivateKeyQR)}
+                  title={showPrivateKeyQR ? "Hide private key QR code" : "Show private key QR code"}
+                >
+                  <svg style={styles.qrIcon} viewBox="0 0 24 24" fill="#666">
+                    <path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H9V11M15,11H17V13H15V11M19,5H21V9H19V5M5,5H9V9H5V5M3,3H11V11H3V3M5,5V9H9V5H5M3,13H11V21H3V13M5,15V19H9V15H5M13,3H21V11H13V3M15,5V9H19V5H15M13,13H15V15H13V13M15,15H17V17H15V15M17,13H19V15H17V13M15,17H17V19H15V17M17,17H19V19H17V17M19,13H21V21H19V13M19,15V19H21V15H19Z" />
+                  </svg>
+                </button>
+              </>
+            )}
+          </div>
+          {showPrivateKeyQR && showPrivateKey && (
+            <div style={styles.qrContainer}>
+              <QRCode
+                value={user.embeddedWallet.privateKey}
+                size={200}
+                style={styles.qrCode}
+              />
+              <p style={styles.qrLabel}>Scan to import private key</p>
+              <div style={styles.privateKeyWarning}>
+                <svg style={styles.warningIcon} viewBox="0 0 24 24" fill="#dc3545">
+                  <path d="M1,21H23L12,2M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16" />
+                </svg>
+                <span>DANGER: This QR contains your private key. Only scan with trusted devices.</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
       <div style={styles.walletWarning}>
         <svg style={styles.warningIcon} viewBox="0 0 24 24" fill="#ff9800">
-          <path d="M1,21H23L12,2M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16"/>
+          <path d="M1,21H23L12,2M12,6L19.53,19H4.47M11,10V14H13V10M11,16V18H13V16" />
         </svg>
         <span>Keep your private key secure. Never share it with anyone.</span>
       </div>
-      
+
       <div style={styles.walletActions}>
-        <button 
-          onClick={handleSignMessage} 
+        <button
+          onClick={handleSignMessage}
           style={styles.signMessageButton}
         >
           Sign Message
@@ -552,7 +581,7 @@ const WalletsSection = () => {
   const handleUnlinkWallet = async (address: string) => {
     setUnlinkingWallet(address);
     setError(null);
-    
+
     try {
       await unlinkWallet(address);
       // Success! The user data will be automatically updated
@@ -581,7 +610,7 @@ const WalletsSection = () => {
             <div style={styles.walletHeader}>
               <h4 style={styles.walletTitle}>Wallet #{index + 1}</h4>
             </div>
-            
+
             <div style={styles.walletField}>
               <label style={styles.walletLabel}>Address:</label>
               <div style={styles.walletValueContainer}>
@@ -593,11 +622,11 @@ const WalletsSection = () => {
                 >
                   {copiedAddress === wallet.address ? (
                     <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#4CAF50">
-                      <path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z"/>
+                      <path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
                     </svg>
                   ) : (
                     <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#666">
-                      <path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"/>
+                      <path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" />
                     </svg>
                   )}
                 </button>
@@ -607,13 +636,13 @@ const WalletsSection = () => {
                   title={showQRCodes.has(wallet.address) ? "Hide QR code" : "Show QR code"}
                 >
                   <svg style={styles.qrIcon} viewBox="0 0 24 24" fill="#666">
-                    <path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H9V11M15,11H17V13H15V11M19,5H21V9H19V5M5,5H9V9H5V5M3,3H11V11H3V3M5,5V9H9V5H5M3,13H11V21H3V13M5,15V19H9V15H5M13,3H21V11H13V3M15,5V9H19V5H15M13,13H15V15H13V13M15,15H17V17H15V15M17,13H19V15H17V13M15,17H17V19H15V17M17,17H19V19H17V17M19,13H21V21H19V13M19,15V19H21V15H19Z"/>
+                    <path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H9V11M15,11H17V13H15V11M19,5H21V9H19V5M5,5H9V9H5V5M3,3H11V11H3V3M5,5V9H9V5H5M3,13H11V21H3V13M5,15V19H9V15H5M13,3H21V11H13V3M15,5V9H19V5H15M13,13H15V15H13V13M15,15H17V17H15V15M17,13H19V15H17V13M15,17H17V19H15V17M17,17H19V19H17V17M19,13H21V21H19V13M19,15V19H21V15H19Z" />
                   </svg>
                 </button>
               </div>
               {showQRCodes.has(wallet.address) && (
                 <div style={styles.qrContainer}>
-                  <QRCode 
+                  <QRCode
                     value={wallet.address}
                     size={200}
                     style={styles.qrCode}
@@ -669,7 +698,7 @@ const MfaSection = () => {
   const handleDeleteMfa = async () => {
     setDeletingMfa(true);
     setError(null);
-    
+
     try {
       await deleteMFA();
       // Success! The user data will be automatically updated
@@ -684,12 +713,12 @@ const MfaSection = () => {
     <div style={styles.mfaSection}>
       <h3>Multi-Factor Authentication</h3>
       {error && <div style={styles.errorMessage}>{error}</div>}
-      
+
       {user?.mfa ? (
         <div style={styles.mfaEnabled}>
           <div style={styles.mfaStatus}>
             <svg style={styles.checkIcon} viewBox="0 0 24 24" fill="#4CAF50">
-              <path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z"/>
+              <path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
             </svg>
             <span>MFA is enabled on your account</span>
           </div>
@@ -780,7 +809,7 @@ const parseUserAgent = (userAgent: string) => {
   // Android detection
   else if (userAgent.includes('Android')) {
     const version = userAgent.match(/Android ([\d.]+)/)?.[1];
-    
+
     // Try to detect specific Android devices
     if (userAgent.includes('SM-')) {
       const model = userAgent.match(/SM-([A-Z0-9]+)/)?.[1];
@@ -839,7 +868,7 @@ const PasskeysSection = () => {
   const handleDeletePasskey = async (credentialId: string) => {
     setDeletingPasskey(credentialId);
     setError(null);
-    
+
     try {
       await deletePasskey(credentialId);
       // No need to reload passkeys - user data will be automatically updated
@@ -859,13 +888,13 @@ const PasskeysSection = () => {
       case 'multiDevice':
         return (
           <svg style={styles.deviceIcon} viewBox="0 0 24 24" fill="#4CAF50">
-            <path d="M4,6H20V16H4M20,18A2,2 0 0,0 22,16V6C22,4.89 21.1,4 20,4H4C2.89,4 2,4.89 2,6V16A2,2 0 0,0 4,18H0V20H24V18H20Z"/>
+            <path d="M4,6H20V16H4M20,18A2,2 0 0,0 22,16V6C22,4.89 21.1,4 20,4H4C2.89,4 2,4.89 2,6V16A2,2 0 0,0 4,18H0V20H24V18H20Z" />
           </svg>
         );
       default:
         return (
           <svg style={styles.deviceIcon} viewBox="0 0 24 24" fill="#2196F3">
-            <path d="M17,19H7V5H17M17,1H7C5.89,1 5,1.89 5,3V21A2,2 0 0,0 7,23H17A2,2 0 0,0 19,21V3C19,1.89 18.1,1 17,1Z"/>
+            <path d="M17,19H7V5H17M17,1H7C5.89,1 5,1.89 5,3V21A2,2 0 0,0 7,23H17A2,2 0 0,0 19,21V3C19,1.89 18.1,1 17,1Z" />
           </svg>
         );
     }
@@ -875,7 +904,7 @@ const PasskeysSection = () => {
     <div style={styles.passkeysSection}>
       <h3>Passkeys</h3>
       {error && <div style={styles.errorMessage}>{error}</div>}
-      
+
       {passkeys && passkeys.length > 0 ? (
         <>
           <p style={styles.passkeysDescription}>
@@ -898,7 +927,7 @@ const PasskeysSection = () => {
                     </span>
                   </div>
                 </div>
-                
+
                 <div style={styles.passkeyDetails}>
                   <div style={styles.passkeyField}>
                     <label style={styles.passkeyLabel}>Credential ID:</label>
@@ -906,7 +935,7 @@ const PasskeysSection = () => {
                       {passkey.credentialID || 'N/A'}
                     </code>
                   </div>
-                  
+
                   {passkey.deviceName && (
                     <div style={styles.passkeyField}>
                       <label style={styles.passkeyLabel}>Device:</label>
@@ -921,7 +950,7 @@ const PasskeysSection = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   {passkey.transports && passkey.transports.length > 0 && (
                     <div style={styles.passkeyField}>
                       <label style={styles.passkeyLabel}>Transports:</label>
@@ -934,7 +963,7 @@ const PasskeysSection = () => {
                       </div>
                     </div>
                   )}
-                  
+
                   <div style={styles.passkeyDates}>
                     <div style={styles.dateField}>
                       <label style={styles.dateLabel}>First Used:</label>
@@ -956,7 +985,7 @@ const PasskeysSection = () => {
                     onClick={() => handleDeletePasskey(passkey.credentialID)}
                     disabled={deletingPasskey === passkey.credentialID}
                   >
-                                          {deletingPasskey === passkey.credentialID ? (
+                    {deletingPasskey === passkey.credentialID ? (
                       <>
                         <div style={styles.spinner}></div>
                         <span style={{ marginLeft: 8 }}>Deleting...</span>
@@ -987,7 +1016,7 @@ const SessionsSection = () => {
   const [sessions, setSessions] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
-  const [locationCache, setLocationCache] = React.useState<{[key: string]: string}>({});
+  const [locationCache, setLocationCache] = React.useState<{ [key: string]: string }>({});
   const [currentRefreshToken, setCurrentRefreshToken] = React.useState<string | null>(null);
 
   const getLocationFromIP = async (ipAddress: string): Promise<string> => {
@@ -1000,7 +1029,7 @@ const SessionsSection = () => {
       // Using ipapi.co free service (1000 requests/day limit)
       const response = await fetch(`https://ipapi.co/${ipAddress}/json/`);
       const data = await response.json();
-      
+
       let location = 'Unknown Location';
       if (data.city && data.country_name) {
         location = `${data.city}, ${data.country_name}`;
@@ -1030,11 +1059,11 @@ const SessionsSection = () => {
   const isCurrentSession = (session: any) => {
     // First check if backend already marked it as current
     if (session.isCurrentSession) return true;
-    
+
     const currentToken = getCurrentRefreshToken();
 
     console.log(currentToken, session.id, session.refreshToken);
-    
+
     // If we have both refresh token and session ID, compare them
     if (currentToken && session.id) {
       // Check if the refresh token starts with the truncated session ID (first 5 chars)
@@ -1043,12 +1072,12 @@ const SessionsSection = () => {
         return true;
       }
     }
-    
+
     // If we have full refresh tokens, do exact comparison
     if (currentToken && session.refreshToken) {
       return session.refreshToken === currentToken;
     }
-    
+
     // Fallback to original field
     return false;
   };
@@ -1060,11 +1089,11 @@ const SessionsSection = () => {
       const result = await getAllSessions();
       setSessions(result.sessions);
       setMessage(`Found ${result.totalCount} active sessions`);
-      
+
       // Get current refresh token for comparison
       const currentToken = getCurrentRefreshToken();
       setCurrentRefreshToken(currentToken);
-      
+
       // Fetch locations for all IPs in the background
       result.sessions.forEach((session: any) => {
         if (session.ipAddress && !locationCache[session.ipAddress]) {
@@ -1118,7 +1147,7 @@ const SessionsSection = () => {
     <div style={styles.sessionsSection}>
       <h3>Session Management</h3>
       <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-        <button 
+        <button
           onClick={handleGetSessions}
           disabled={loading}
           style={{
@@ -1133,7 +1162,7 @@ const SessionsSection = () => {
         >
           {loading ? 'Loading...' : 'Get All Sessions'}
         </button>
-        <button 
+        <button
           onClick={handleRevokeAllSessions}
           disabled={loading || sessions.length === 0}
           style={{
@@ -1249,12 +1278,12 @@ const SessionsSection = () => {
 // The main App component
 const App = () => {
   const appId = "684dea5189269732f9817561";
-  
+
   return (
 
-            <Pr0d appId={appId}>
-              <AppContent />
-            </Pr0d>
+    <Pr0d appId={appId}>
+      <AppContent />
+    </Pr0d>
 
   );
 };
@@ -1262,13 +1291,13 @@ const App = () => {
 // The AppContent component that renders different content based on auth state
 const AppContent = () => {
   const { isAuthenticated } = usePr0d();
-  
+
   return (
     <div style={styles.content}>
       <header style={styles.appHeader}>
         <h1> pr0d.io </h1>
       </header>
-      
+
       {isAuthenticated ? (
         <Dashboard />
       ) : (
@@ -1775,6 +1804,44 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'all 0.2s ease'
 
   },
+  linkMethodsSection: {
+    marginBottom: 30,
+    paddingBottom: 20,
+    borderBottom: '1px solid #eee'
+  },
+  linkMethodsDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 15,
+    lineHeight: 1.4
+  },
+  directLinkButtons: {
+    display: 'flex',
+    gap: 10,
+    flexWrap: 'wrap'
+  },
+  customLinkMFAButton: {
+    padding: '10px 20px',
+    backgroundColor: '#ff6b35',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 5,
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 500,
+    transition: 'all 0.2s ease'
+  },
+  customLinkPasskeyButton: {
+    padding: '10px 20px',
+    backgroundColor: '#9b59b6',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 5,
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 500,
+    transition: 'all 0.2s ease'
+  },
   passkeysSection: {
     marginBottom: 30,
     paddingBottom: 20,
@@ -2025,6 +2092,6 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 10,
     fontSize: 12
   }
- };
- 
- export default App;
+};
+
+export default App;

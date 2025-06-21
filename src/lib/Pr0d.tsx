@@ -101,6 +101,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
     const [passkeyOptions, setPasskeyOptions] = useState<any>(null);
     const [isPasskeySupported, setIsPasskeySupported] = useState(false);
     const [passkeyLoading, setPasskeyLoading] = useState(false);
+    const [isPasskeySetupMode, setIsPasskeySetupMode] = useState(false);
 
     // Track if we just initiated a wallet connection
     const [isConnecting, setIsConnecting] = useState(false);
@@ -607,6 +608,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
         setStep('email');
         setCode(['', '', '', '', '', '']);
         setError(null);
+        setIsPasskeySetupMode(false);
     };
 
     const login = () => {
@@ -651,7 +653,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
         resetCommonState();
         setShowPopup({ show: true, view: 'mfa' });
         setMfaStep('passkey');
-        handlePasskeySetup();
+        handlePasskeySetup(false);
     };
 
     const handleWalletAuth = async () => {
@@ -1597,7 +1599,7 @@ Issued At: ${components.issuedAt}`;
         }
     };
 
-    const handlePasskeySetup = async () => {
+    const handlePasskeySetup = async (isDirect = false) => {
         if (!isPasskeySupported) {
             setError('Passkeys are not supported on this device');
             return;
@@ -1623,6 +1625,7 @@ Issued At: ${components.issuedAt}`;
                         const result = await verifyPasskey(credential);
                         if (result.type === 'registration') {
                             setMfaStep('passkey-success');
+                            setIsPasskeySetupMode(false);
                             // Close popup after delay
                             setTimeout(() => {
                                 closePopup();
@@ -1631,16 +1634,28 @@ Issued At: ${components.issuedAt}`;
                     }
                 } catch (err: any) {
                     console.error('Passkey creation failed:', err);
-                    setError(err.message || 'Failed to create passkey');
-                    setMfaStep('method');
+                    if (isDirect) {
+                        // For direct calls, show dedicated error page
+                        setPasskeyError(err.message || 'Failed to create passkey');
+                        setShowPopup({ show: true, view: 'passkey-error' });
+                    } else {
+                        setError(err.message || 'Failed to create passkey');
+                        setMfaStep('method');
+                    }
                 }
                 setPasskeyLoading(false);
             }, 500);
 
         } catch (err: any) {
             console.error('Passkey setup failed:', err);
-            setError(err.message || 'Failed to setup passkey');
             setPasskeyLoading(false);
+            if (isDirect) {
+                // For direct calls, show dedicated error page
+                setPasskeyError(err.message || 'Failed to setup passkey');
+                setShowPopup({ show: true, view: 'passkey-error' });
+            } else {
+                setError(err.message || 'Failed to setup passkey');
+            }
         }
     };
 
@@ -1802,6 +1817,21 @@ Issued At: ${components.issuedAt}`;
         }
     };
 
+    const linkMFA = async () => {
+        resetCommonState();
+        setShowPopup({ show: true, view: 'mfa' });
+        setMfaStep('qr');
+        await fetchMfaSetup();
+    };
+
+    const linkPasskey = () => {
+        resetCommonState();
+        setIsPasskeySetupMode(true);
+        setShowPopup({ show: true, view: 'mfa' });
+        setMfaStep('passkey');
+        handlePasskeySetup(true);
+    };
+
     const teeSignMessage = async (message: string): Promise<{ signature: string; address: string; message: string }> => {
         if (!accessToken) {
             throw new Error('User not authenticated');
@@ -1960,6 +1990,8 @@ Issued At: ${components.issuedAt}`;
         triggerProviderLink,
         triggerWalletLink,
         triggerPasskeySetup,
+        linkMFA,
+        linkPasskey,
         setupMFA,
         verifyMFA,
         deleteMFA,
@@ -2183,7 +2215,7 @@ Issued At: ${components.issuedAt}`;
                                                 ...styles.altButton,
                                                 opacity: (passkeyLoading || !isPasskeySupported) ? 0.7 : 1
                                             }}
-                                            onClick={() => handlePasskeySetup()}
+                                            onClick={() => handlePasskeySetup(false)}
                                             disabled={passkeyLoading || !isPasskeySupported}
                                             focusedButton={focusedButton}
                                             setFocusedButton={setFocusedButton}
@@ -3133,7 +3165,15 @@ Issued At: ${components.issuedAt}`;
                                             style={styles.retryButton}
                                             onClick={() => {
                                                 setPasskeyError(null);
-                                                setShowPopup({ show: true, view: 'loginorsignup' });
+                                                if (isPasskeySetupMode) {
+                                                    // For setup mode, restart the passkey setup
+                                                    setShowPopup({ show: true, view: 'mfa' });
+                                                    setMfaStep('passkey');
+                                                    handlePasskeySetup(true);
+                                                } else {
+                                                    // For login mode, go back to login
+                                                    setShowPopup({ show: true, view: 'loginorsignup' });
+                                                }
                                             }}
                                             focusedButton={focusedButton}
                                             setFocusedButton={setFocusedButton}
