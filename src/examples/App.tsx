@@ -23,13 +23,13 @@ document.head.appendChild(spinnerStyle);
 
 // The Dashboard component that's only shown to authenticated users
 const Dashboard = () => {
-  const { user, logout, getUser, teeSignMessage } = usePr0d();
-
+  const { user, logout, getUser } = usePr0d();
+2
   const handleGetUser = async () => {
     try {
       await getUser();
     } catch (error: any) {
-      alert(`Failed to get user: ${error.message}`);
+      console.log(error);
     }
   };
 
@@ -87,6 +87,8 @@ const Dashboard = () => {
           <CustomLinkXButton />
         </div>
       </div>
+
+      <SessionsSection />
       
       {!user?.email?.email && <CustomLinkEmailButton />}
     </div>
@@ -339,21 +341,11 @@ const CustomLinkWalletButton = () => {
 };
 
 const EmbeddedWalletSection = () => {
-  const { user, teeSignMessage, createTransaction, getTransaction, sponsorTransaction, getPendingTransactions } = usePr0d();
+  const { user } = usePr0d();
   const [showPrivateKey, setShowPrivateKey] = React.useState(false);
   const [copied, setCopied] = React.useState<'address' | 'privateKey' | null>(null);
   const [showAddressQR, setShowAddressQR] = React.useState(false);
   const [showPrivateKeyQR, setShowPrivateKeyQR] = React.useState(false);
-  
-  // Transaction sponsorship states
-  const [transactionData, setTransactionData] = React.useState<any>(null);
-  const [transactionId, setTransactionId] = React.useState('');
-  const [pendingTxs, setPendingTxs] = React.useState<any[]>([]);
-  const [sponsorPrivateKey, setSponsorPrivateKey] = React.useState('');
-  const [rpcUrl, setRpcUrl] = React.useState('https://rpc.therpc.io/bsc-testnet');
-  const [txTo, setTxTo] = React.useState('0x3ae99FdBB2d7A003E32ebE430Cb2C75fC48a3a95');
-  const [txValue, setTxValue] = React.useState('0');
-  const [chainId, setChainId] = React.useState(97); // bsc testnet
 
   const copyToClipboard = async (text: string, type: 'address' | 'privateKey') => {
     try {
@@ -377,74 +369,7 @@ const EmbeddedWalletSection = () => {
     const message = prompt('Enter a message to sign:');
     if (!message) return;
     
-    try {
-      const result = await teeSignMessage(message);
-      alert(`Message signed successfully!\n\nMessage: ${result.message}\nSignature: ${result.signature}\nAddress: ${result.address}`);
-    } catch (error: any) {
-      alert(`Failed to sign message: ${error.message}`);
-    }
-  };
-
-  const handleCreateTransaction = async () => {
-    try {
-      const result = await createTransaction({
-        to: txTo,
-        value: (parseFloat(txValue) * 1e18).toString(), // Convert to wei
-        chainId: chainId
-      });
-      setTransactionData(result);
-      alert(`Transaction created successfully!\n\nTransaction ID: ${result.transactionId}\nUser Address: ${result.userAddress}\nExpires At: ${result.expiresAt}`);
-    } catch (error: any) {
-      alert(`Failed to create transaction: ${error.message}`);
-    }
-  };
-
-  const handleGetTransaction = async () => {
-    if (!transactionId) {
-      alert('Please enter a transaction ID');
-      return;
-    }
-
-    try {
-      const result = await getTransaction(transactionId);
-      setTransactionData(result);
-      alert(`Transaction Status: ${result.status}\n\nTransaction ID: ${result.transactionId}\nUser Address: ${result.userAddress}\nCreated At: ${result.createdAt}${result.sponsorTxHash ? `\nSponsor Tx Hash: ${result.sponsorTxHash}` : ''}`);
-    } catch (error: any) {
-      alert(`Failed to get transaction: ${error.message}`);
-    }
-  };
-
-  const handleSponsorTransaction = async () => {
-    if (!transactionId) {
-      alert('Please enter a transaction ID');
-      return;
-    }
-    if (!sponsorPrivateKey) {
-      alert('Please enter sponsor private key');
-      return;
-    }
-    if (!rpcUrl) {
-      alert('Please enter RPC URL');
-      return;
-    }
-
-    try {
-      const result = await sponsorTransaction(transactionId, sponsorPrivateKey, rpcUrl);
-      alert(`Transaction sponsored successfully!\n\nTransaction Hash: ${result.txHash}\nSponsor Address: ${result.sponsorAddress}\nStatus: ${result.status}`);
-    } catch (error: any) {
-      alert(`Failed to sponsor transaction: ${error.message}`);
-    }
-  };
-
-  const handleGetPendingTransactions = async () => {
-    try {
-      const result = await getPendingTransactions();
-      setPendingTxs(result.transactions);
-      alert(`Found ${result.count} pending transactions. Check the console for details.`);
-      console.log('Pending transactions:', result.transactions);
-    } catch (error: any) {
-      alert(`Failed to get pending transactions: ${error.message}`);
-    }
+    alert('Transaction sponsorship features have been removed.');
   };
 
 
@@ -580,117 +505,7 @@ const EmbeddedWalletSection = () => {
         </button>
       </div>
 
-      {/* Transaction Sponsorship Section */}
-      <div style={styles.transactionSection}>
-        <h4>🚀 Transaction Sponsorship</h4>
-        
-        {/* Create Transaction */}
-        <div style={styles.transactionGroup}>
-          <h5>Create Transaction</h5>
-          <input
-            type="text"
-            placeholder="To Address"
-            value={txTo}
-            onChange={(e) => setTxTo(e.target.value)}
-            style={styles.input}
-          />
-          <input
-            type="text"
-            placeholder="Value (ETH)"
-            value={txValue}
-            onChange={(e) => setTxValue(e.target.value)}
-            style={styles.input}
-          />
-          <input
-            type="number"
-            placeholder="Chain ID"
-            value={chainId}
-            onChange={(e) => setChainId(parseInt(e.target.value))}
-            style={styles.input}
-          />
-          <button onClick={handleCreateTransaction} style={styles.actionButton}>
-            Create Transaction
-          </button>
-        </div>
 
-        {/* Transaction Details */}
-        {transactionData && (
-          <div style={styles.transactionDetails}>
-            <h5>Transaction Details</h5>
-            <p><strong>ID:</strong> {transactionData.transactionId}</p>
-            <p><strong>Status:</strong> {transactionData.status}</p>
-            <p><strong>User Address:</strong> {transactionData.userAddress}</p>
-            {transactionData.sponsorTxHash && (
-              <p><strong>Sponsor Tx Hash:</strong> {transactionData.sponsorTxHash}</p>
-            )}
-          </div>
-        )}
-
-        {/* Get Transaction */}
-        <div style={styles.transactionGroup}>
-          <h5>Get Transaction</h5>
-          <input
-            type="text"
-            placeholder="Transaction ID"
-            value={transactionId}
-            onChange={(e) => setTransactionId(e.target.value)}
-            style={styles.input}
-          />
-          <button onClick={handleGetTransaction} style={styles.actionButton}>
-            Get Transaction
-          </button>
-        </div>
-
-        {/* Sponsor Transaction */}
-        <div style={styles.transactionGroup}>
-          <h5>Sponsor Transaction</h5>
-          <input
-            type="text"
-            placeholder="Transaction ID"
-            value={transactionId}
-            onChange={(e) => setTransactionId(e.target.value)}
-            style={styles.input}
-          />
-          <input
-            type="text"
-            placeholder="Sponsor Private Key"
-            value={sponsorPrivateKey}
-            onChange={(e) => setSponsorPrivateKey(e.target.value)}
-            style={styles.input}
-          />
-          <input
-            type="text"
-            placeholder="RPC URL"
-            value={rpcUrl}
-            onChange={(e) => setRpcUrl(e.target.value)}
-            style={styles.input}
-          />
-          <button onClick={handleSponsorTransaction} style={styles.actionButton}>
-            Sponsor Transaction
-          </button>
-        </div>
-
-        {/* Get Pending Transactions */}
-        <div style={styles.transactionGroup}>
-          <h5>Pending Transactions</h5>
-          <button onClick={handleGetPendingTransactions} style={styles.actionButton}>
-            Get Pending Transactions
-          </button>
-          {pendingTxs.length > 0 && (
-            <div style={styles.pendingTxs}>
-              <p><strong>Found {pendingTxs.length} pending transactions:</strong></p>
-              {pendingTxs.map((tx, index) => (
-                <div key={index} style={styles.pendingTx}>
-                  <p><strong>ID:</strong> {tx.transactionId}</p>
-                  <p><strong>To:</strong> {tx.txData.to}</p>
-                  <p><strong>Value:</strong> {tx.txData.value}</p>
-                  <p><strong>Created:</strong> {new Date(tx.createdAt).toLocaleString()}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 };
@@ -910,6 +725,109 @@ const MfaSection = () => {
   );
 };
 
+// Utility function to parse user agent into user-friendly device names
+const parseUserAgent = (userAgent: string) => {
+  if (!userAgent) return { device: 'Unknown Device', browser: 'Unknown Browser' };
+
+  // Device-first detection for user-friendly names
+  let device = 'Unknown Device';
+  let browser = 'Unknown Browser';
+
+  // iPhone detection
+  if (userAgent.includes('iPhone')) {
+    // Try to detect iPhone model
+    if (userAgent.includes('iPhone OS')) {
+      const version = userAgent.match(/iPhone OS ([\d_]+)/)?.[1]?.replace(/_/g, '.');
+      device = version ? `iPhone (iOS ${version})` : 'iPhone';
+    } else {
+      device = 'iPhone';
+    }
+  }
+  // iPad detection
+  else if (userAgent.includes('iPad')) {
+    const version = userAgent.match(/OS ([\d_]+)/)?.[1]?.replace(/_/g, '.');
+    device = version ? `iPad (iOS ${version})` : 'iPad';
+  }
+  // Mac detection
+  else if (userAgent.includes('Mac OS X') || userAgent.includes('Macintosh')) {
+    const version = userAgent.match(/Mac OS X ([\d_]+)/)?.[1]?.replace(/_/g, '.');
+    // Can't reliably distinguish between MacBook, iMac, Mac Pro, etc. from user agent
+    // So we'll just use "Mac" for all Mac computers
+    device = version ? `Mac (macOS ${version})` : 'Mac';
+  }
+  // Windows detection
+  else if (userAgent.includes('Windows NT')) {
+    const version = userAgent.match(/Windows NT ([\d.]+)/)?.[1];
+    let windowsName = 'Windows PC';
+    switch (version) {
+      case '10.0':
+        windowsName = 'Windows 11 PC';
+        break;
+      case '6.3':
+        windowsName = 'Windows 8.1 PC';
+        break;
+      case '6.2':
+        windowsName = 'Windows 8 PC';
+        break;
+      case '6.1':
+        windowsName = 'Windows 7 PC';
+        break;
+      default:
+        windowsName = 'Windows PC';
+    }
+    device = windowsName;
+  }
+  // Android detection
+  else if (userAgent.includes('Android')) {
+    const version = userAgent.match(/Android ([\d.]+)/)?.[1];
+    
+    // Try to detect specific Android devices
+    if (userAgent.includes('SM-')) {
+      const model = userAgent.match(/SM-([A-Z0-9]+)/)?.[1];
+      device = model ? `Samsung Galaxy ${model}` : 'Samsung Galaxy';
+    } else if (userAgent.includes('Pixel')) {
+      const model = userAgent.match(/Pixel ([^;)]+)/)?.[1];
+      device = model ? `Google Pixel ${model}` : 'Google Pixel';
+    } else if (userAgent.includes('OnePlus')) {
+      const model = userAgent.match(/OnePlus ([^;)]+)/)?.[1];
+      device = model ? `OnePlus ${model}` : 'OnePlus';
+    } else {
+      device = version ? `Android Phone (${version})` : 'Android Phone';
+    }
+  }
+  // Linux detection
+  else if (userAgent.includes('Linux')) {
+    if (userAgent.includes('Ubuntu')) {
+      device = 'Ubuntu PC';
+    } else {
+      device = 'Linux PC';
+    }
+  }
+  // Generic fallback
+  else if (userAgent.includes('Mobile')) {
+    device = 'Mobile Device';
+  } else {
+    device = 'Desktop Computer';
+  }
+
+  // Browser detection
+  if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) {
+    browser = 'Chrome';
+  } else if (userAgent.includes('Firefox')) {
+    browser = 'Firefox';
+  } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
+    browser = 'Safari';
+  } else if (userAgent.includes('Edg')) {
+    browser = 'Microsoft Edge';
+  } else if (userAgent.includes('Opera') || userAgent.includes('OPR')) {
+    browser = 'Opera';
+  } else {
+    browser = 'Web Browser';
+  }
+
+  return { device, browser };
+};
+
 const PasskeysSection = () => {
   const { user, deletePasskey } = usePr0d();
   const [deletingPasskey, setDeletingPasskey] = React.useState<string | null>(null);
@@ -991,10 +909,16 @@ const PasskeysSection = () => {
                   
                   {passkey.deviceName && (
                     <div style={styles.passkeyField}>
-                      <label style={styles.passkeyLabel}>Device Name:</label>
-                      <span style={styles.deviceNameValue}>
-                        {passkey.deviceName}
-                      </span>
+                      <label style={styles.passkeyLabel}>Device:</label>
+                      <div style={styles.deviceSimpleDisplay}>
+                        <span style={styles.deviceSimpleValue}>
+                          {parseUserAgent(passkey.deviceName).device}
+                        </span>
+                        <details style={styles.rawUserAgentDetails}>
+                          <summary style={styles.rawUserAgentSummary}>View technical details</summary>
+                          <code style={styles.rawUserAgentCode}>{passkey.deviceName}</code>
+                        </details>
+                      </div>
                     </div>
                   )}
                   
@@ -1058,6 +982,270 @@ const PasskeysSection = () => {
   );
 };
 
+const SessionsSection = () => {
+  const { getAllSessions, revokeAllSessions, revokeSession, user } = usePr0d();
+  const [sessions, setSessions] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const [message, setMessage] = React.useState<string | null>(null);
+  const [locationCache, setLocationCache] = React.useState<{[key: string]: string}>({});
+  const [currentRefreshToken, setCurrentRefreshToken] = React.useState<string | null>(null);
+
+  const getLocationFromIP = async (ipAddress: string): Promise<string> => {
+    // Check cache first
+    if (locationCache[ipAddress]) {
+      return locationCache[ipAddress];
+    }
+
+    try {
+      // Using ipapi.co free service (1000 requests/day limit)
+      const response = await fetch(`https://ipapi.co/${ipAddress}/json/`);
+      const data = await response.json();
+      
+      let location = 'Unknown Location';
+      if (data.city && data.country_name) {
+        location = `${data.city}, ${data.country_name}`;
+      } else if (data.country_name) {
+        location = data.country_name;
+      } else if (data.error) {
+        location = 'Private/Local IP';
+      }
+
+      // Cache the result
+      setLocationCache(prev => ({ ...prev, [ipAddress]: location }));
+      return location;
+    } catch (error) {
+      console.error('Error getting location for IP:', ipAddress, error);
+      const fallbackLocation = 'Unknown Location';
+      setLocationCache(prev => ({ ...prev, [ipAddress]: fallbackLocation }));
+      return fallbackLocation;
+    }
+  };
+
+  const getCurrentRefreshToken = () => {
+    // Try to get the refresh token from localStorage or sessionStorage
+    const refreshToken = localStorage.getItem('pr0d:refresh_token');
+    return refreshToken;
+  };
+
+  const isCurrentSession = (session: any) => {
+    // First check if backend already marked it as current
+    if (session.isCurrentSession) return true;
+    
+    const currentToken = getCurrentRefreshToken();
+
+    console.log(currentToken, session.id, session.refreshToken);
+    
+    // If we have both refresh token and session ID, compare them
+    if (currentToken && session.id) {
+      // Check if the refresh token starts with the truncated session ID (first 5 chars)
+      const truncatedSessionId = session.id.substring(0, 5);
+      if (currentToken.startsWith(truncatedSessionId)) {
+        return true;
+      }
+    }
+    
+    // If we have full refresh tokens, do exact comparison
+    if (currentToken && session.refreshToken) {
+      return session.refreshToken === currentToken;
+    }
+    
+    // Fallback to original field
+    return false;
+  };
+
+  const handleGetSessions = async () => {
+    setLoading(true);
+    setMessage(null);
+    try {
+      const result = await getAllSessions();
+      setSessions(result.sessions);
+      setMessage(`Found ${result.totalCount} active sessions`);
+      
+      // Get current refresh token for comparison
+      const currentToken = getCurrentRefreshToken();
+      setCurrentRefreshToken(currentToken);
+      
+      // Fetch locations for all IPs in the background
+      result.sessions.forEach((session: any) => {
+        if (session.ipAddress && !locationCache[session.ipAddress]) {
+          getLocationFromIP(session.ipAddress);
+        }
+      });
+    } catch (error: any) {
+      console.error('Error getting sessions:', error);
+      setMessage(`Error: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRevokeAllSessions = async () => {
+    setLoading(true);
+    setMessage(null);
+    try {
+      const result = await revokeAllSessions();
+      setMessage(result.message);
+      setSessions([]); // Clear the sessions list
+    } catch (error: any) {
+      console.error('Error revoking all sessions:', error);
+      setMessage(`Error: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRevokeSession = async (sessionId: string) => {
+    setLoading(true);
+    setMessage(null);
+    try {
+      const result = await revokeSession(sessionId);
+      setMessage(result.message);
+      // Remove the revoked session from the list
+      setSessions(sessions.filter(session => session.id !== sessionId));
+    } catch (error: any) {
+      console.error('Error revoking session:', error);
+      setMessage(`Error: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  return (
+    <div style={styles.sessionsSection}>
+      <h3>Session Management</h3>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+        <button 
+          onClick={handleGetSessions}
+          disabled={loading}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#007bff',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: loading ? 'not-allowed' : 'pointer',
+            opacity: loading ? 0.6 : 1
+          }}
+        >
+          {loading ? 'Loading...' : 'Get All Sessions'}
+        </button>
+        <button 
+          onClick={handleRevokeAllSessions}
+          disabled={loading || sessions.length === 0}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#dc3545',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: (loading || sessions.length === 0) ? 'not-allowed' : 'pointer',
+            opacity: (loading || sessions.length === 0) ? 0.6 : 1
+          }}
+        >
+          {loading ? 'Loading...' : 'Revoke All Sessions'}
+        </button>
+      </div>
+
+      {message && (
+        <div style={{
+          padding: '10px',
+          marginBottom: '10px',
+          backgroundColor: message.includes('Error') ? '#f8d7da' : '#d4edda',
+          color: message.includes('Error') ? '#721c24' : '#155724',
+          border: `1px solid ${message.includes('Error') ? '#f5c6cb' : '#c3e6cb'}`,
+          borderRadius: '4px'
+        }}>
+          {message}
+        </div>
+      )}
+
+      {sessions.length > 0 && (
+        <div>
+          <h4>Active Sessions ({sessions.length})</h4>
+          <div style={{ display: 'grid', gap: '10px' }}>
+            {sessions.map((session) => (
+              <div key={session.id} style={{
+                border: '1px solid #ddd',
+                borderRadius: '8px',
+                padding: '15px',
+                backgroundColor: '#f9f9f9'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
+                      Session ID: {session.id}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>
+                      <strong>Device:</strong> {parseUserAgent(session.userAgent).device}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>
+                      <strong>Location:</strong> {locationCache[session.ipAddress] || 'Loading...'}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>
+                      <strong>IP Address:</strong> {session.ipAddress}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>
+                      <strong>Created:</strong> {formatDate(session.createdAt)}
+                    </div>
+                    {session.expiresAt && (
+                      <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>
+                        <strong>Expires:</strong> {formatDate(session.expiresAt)}
+                      </div>
+                    )}
+                    {isCurrentSession(session) && (
+                      <div style={{
+                        display: 'inline-block',
+                        padding: '2px 8px',
+                        backgroundColor: '#28a745',
+                        color: 'white',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                      }}>
+                        Current Session
+                      </div>
+                    )}
+                    {session.refreshToken && (
+                      <div style={{ fontSize: '12px', color: '#999', marginTop: '5px' }}>
+                        <strong>Token:</strong> {session.refreshToken.substring(0, 20)}...
+                        {currentRefreshToken === session.refreshToken && (
+                          <span style={{ color: '#28a745', fontWeight: 'bold', marginLeft: '5px' }}>
+                            ✓ Current
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleRevokeSession(session.id)}
+                    disabled={loading}
+                    style={{
+                      padding: '6px 12px',
+                      backgroundColor: '#dc3545',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      opacity: loading ? 0.6 : 1,
+                      fontSize: '12px'
+                    }}
+                  >
+                    Revoke
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // The main App component
 const App = () => {
   const appId = "684dea5189269732f9817561";
@@ -1096,12 +1284,15 @@ const AppContent = () => {
 const styles: Record<string, React.CSSProperties> = {
   app: {
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-    maxWidth: 1200,
+    maxWidth: '80%',
     margin: '0 auto',
     padding: 20
   },
   content: {
-    paddingTop: 20
+    paddingTop: 20,
+    maxWidth: '80%',
+    margin: '0 auto',
+    width: '100%'
   },
   appHeader: {
     borderBottom: '1px solid #eee',
@@ -1440,6 +1631,11 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center',
     margin: '8px 0 0 0'
   },
+  sessionsSection: {
+    marginBottom: 30,
+    paddingBottom: 20,
+    borderBottom: '1px solid #eee'
+  },
   privateKeyWarning: {
     display: 'flex',
     alignItems: 'center',
@@ -1577,6 +1773,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     transition: 'all 0.2s ease'
+
   },
   passkeysSection: {
     marginBottom: 30,
@@ -1683,6 +1880,43 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#e7f3ff',
     border: '1px solid #b3d9ff',
     borderRadius: 4
+  },
+  deviceSimpleDisplay: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8
+  },
+  deviceSimpleValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: 500,
+    padding: '8px 12px',
+    backgroundColor: '#e7f3ff',
+    border: '1px solid #b3d9ff',
+    borderRadius: 4
+  },
+  rawUserAgentDetails: {
+    marginTop: 8
+  },
+  rawUserAgentSummary: {
+    fontSize: 12,
+    color: '#666',
+    cursor: 'pointer',
+    padding: '4px 0',
+    userSelect: 'none'
+  },
+  rawUserAgentCode: {
+    display: 'block',
+    fontSize: 11,
+    fontFamily: 'Monaco, Consolas, "Courier New", monospace',
+    color: '#666',
+    backgroundColor: '#f8f9fa',
+    padding: '8px',
+    borderRadius: 4,
+    border: '1px solid #e9ecef',
+    marginTop: 4,
+    wordBreak: 'break-all',
+    lineHeight: 1.4
   },
   transportsList: {
     display: 'flex',
@@ -1791,6 +2025,6 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 10,
     fontSize: 12
   }
-};
-
-export default App;
+ };
+ 
+ export default App;

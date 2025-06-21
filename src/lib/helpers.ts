@@ -5,37 +5,6 @@ export const isValidEmail = (email: string): boolean => {
     return emailRegex.test(email);
 };
 
-export const getDeviceName = (): string => {
-    const userAgent = navigator.userAgent;
-
-    // Detect OS
-    let os = '';
-    if (userAgent.includes('Windows')) os = 'Windows';
-    else if (userAgent.includes('Mac OS X')) os = 'macOS';
-    else if (userAgent.includes('iPhone')) os = 'iOS';
-    else if (userAgent.includes('iPad')) os = 'iPadOS';
-    else if (userAgent.includes('Android')) os = 'Android';
-    else if (userAgent.includes('Linux')) os = 'Linux';
-
-    // Detect browser
-    let browser = '';
-    if (userAgent.includes('Chrome') && !userAgent.includes('Edge')) browser = 'Chrome';
-    else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) browser = 'Safari';
-    else if (userAgent.includes('Firefox')) browser = 'Firefox';
-    else if (userAgent.includes('Edge')) browser = 'Edge';
-
-    // Combine for a readable device name
-    if (os && browser) {
-        return `${browser} on ${os}`;
-    } else if (os) {
-        return os;
-    } else if (browser) {
-        return browser;
-    } else {
-        return 'Unknown Device';
-    }
-};
-
 export const base64urlToUint8Array = (base64url: string): Uint8Array => {
     const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
     const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');

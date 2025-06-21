@@ -30,6 +30,15 @@ export interface AppConfig {
     }
 }
 
+export interface Session {
+    id: string;
+    createdAt: string;
+    userAgent: string;
+    ipAddress: string;
+    expiresAt: string | null;
+    isCurrentSession: boolean;
+}
+
 export interface AuthContextType {
     accessToken: string | null;
     isAuthenticated: boolean;
@@ -59,6 +68,9 @@ export interface AuthContextType {
     listPasskeys: () => Promise<{ passkeys: any[]; count: number }>;
     deletePasskey: (credentialId: string) => Promise<void>;
     getUser: (token?: string) => Promise<User>;
+    getAllSessions: () => Promise<{ sessions: Session[]; totalCount: number }>;
+    revokeAllSessions: () => Promise<{ message: string; revokedCount: number }>;
+    revokeSession: (sessionId: string) => Promise<{ message: string }>;
     teeSignMessage: (message: string) => Promise<{ signature: string; address: string; message: string }>;
     createTransaction: (txData: { to: string; value?: string; data?: string; gasLimit?: string; maxFeePerGas?: string; maxPriorityFeePerGas?: string; chainId: number }) => Promise<{ transactionId: string; userAddress: string; txData: any; expiresAt: string }>;
     getTransaction: (transactionId: string) => Promise<{ transactionId: string; userAddress: string; txData: any; status: string; createdAt: string; sponsorTxHash?: string }>;
@@ -89,6 +101,14 @@ export interface WalletCircleProps {
     walletName: string;
     connectors: readonly any[];
     connectingWallet: any;
+    hasLoadingAnimation?: boolean;
+}
+
+export interface WalletStatusCircleProps {
+    status: 'loading' | 'success' | 'error' | 'signing';
+    walletName: string;
+    connectors: any[];
+    connectingWallet: { name: string; id: string } | null;
     hasLoadingAnimation?: boolean;
 }
 

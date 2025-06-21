@@ -14,7 +14,7 @@ import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 
 import { AppConfig, User, AuthContextType } from './interfaces';
 import { Spinner, FocusableButton, WalletStatusCircle, ProviderStatusCircle } from './components';
-import { isValidEmail, getDeviceName, base64urlToUint8Array, isLightColor, getLightAccentColor, getStyles } from './helpers';
+import { isValidEmail, base64urlToUint8Array, isLightColor, getLightAccentColor, getStyles } from './helpers';
 
 import axios from 'axios';
 
@@ -257,6 +257,71 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
         }
     }
 
+    useEffect(() => {
+        const responseInterceptor = axios.interceptors.response.use(
+            response => response,
+            async error => {
+                const originalRequest = error.config;
+
+                // Avoid retrying refresh token requests to prevent infinite loops
+                if (originalRequest.url?.includes('/api/sessions/refresh')) {
+                    return Promise.reject(error);
+                }
+
+                if(error.response?.data?.message === 'Authorization token: revoked') {
+                    localStorage.removeItem('pr0d:access_token');
+                    localStorage.removeItem('pr0d:refresh_token');
+                    setRefreshToken(null);
+                    setUser(null);
+                    setAccessToken(null);
+                    return Promise.reject(error);
+                }
+
+                if (error.response?.status === 401 && !originalRequest._retry) {
+                    originalRequest._retry = true;
+                    if (localStorage.getItem('pr0d:access_token')) {
+                        try {
+                            const currentRefreshToken = localStorage.getItem('pr0d:refresh_token');
+                            if (!currentRefreshToken) {
+                                throw new Error("No refresh token found");
+                            }
+                            const res = await axios.post(`${baseUrl}/api/sessions/refresh`, { refresh_token: currentRefreshToken }, { headers: { 'pr0d-app-id': appId } });
+
+                            const newAccessToken = res.data.data.access_token;
+                            const newRefreshToken = res.data.data.refresh_token;
+
+                            if (newAccessToken) {
+                                localStorage.setItem('pr0d:access_token', newAccessToken);
+                                setAccessToken(newAccessToken);
+                            }
+                            if (newRefreshToken) {
+                                localStorage.setItem('pr0d:refresh_token', newRefreshToken);
+                                setRefreshToken(newRefreshToken);
+                            }
+
+                            originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+                            return axios(originalRequest);
+                        } catch (refreshError) {
+                            localStorage.removeItem('pr0d:access_token');
+                            localStorage.removeItem('pr0d:refresh_token');
+                            setRefreshToken(null);
+                            setUser(null);
+                            setAccessToken(null);
+                            return Promise.reject(refreshError);
+                        }
+                    } else {
+                        setAccessToken(null);
+                    }
+                }
+                return Promise.reject(error);
+            }
+        );
+
+        return () => {
+            axios.interceptors.response.eject(responseInterceptor);
+        };
+    }, [appId, baseUrl, setAccessToken, setRefreshToken, setUser]);
+
     const handleInitEmail = async () => {
         if (!email) {
             setError('Email is required');
@@ -377,7 +442,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
         if (refreshToken) {
             try {
                 await axios.delete(`${baseUrl}/api/sessions/revoke`, {
-                    headers: { 'pr0d-app-id': appId },
+                    headers: { 'pr0d-app-id': appId, 'authorization': `Bearer ${accessToken}` },
                     data: { refresh_token: refreshToken }
                 });
             } catch (e: any) {
@@ -1639,11 +1704,8 @@ Issued At: ${components.issuedAt}`;
 
     const verifyPasskey = async (credential: any): Promise<{ type: 'registration' | 'authentication'; user?: User; accessToken?: string; refreshToken?: string; message: string }> => {
         try {
-            const deviceName = getDeviceName();
-
             const response = await axios.post(`${baseUrl}/api/passkeys/verify`, {
-                credential,
-                deviceName
+                credential
             }, {
                 headers: {
                     'pr0d-app-id': appId,
@@ -1825,6 +1887,67 @@ Issued At: ${components.issuedAt}`;
         }
     };
 
+    const getAllSessions = async (): Promise<{ sessions: any[]; totalCount: number }> => {
+        if (!accessToken) {
+            throw new Error('User not authenticated');
+        }
+
+        try {
+            const response = await axios.get(`${baseUrl}/api/sessions`, {
+                headers: {
+                    'authorization': `Bearer ${accessToken}`,
+                    'pr0d-app-id': appId
+                }
+            });
+            return response.data.data;
+        } catch (error: any) {
+            console.error('Error getting sessions:', error);
+            throw new Error(error.response?.data?.message || 'Failed to get sessions');
+        }
+    };
+
+    const revokeAllSessions = async (): Promise<{ message: string; revokedCount: number }> => {
+        if (!accessToken) {
+            throw new Error('User not authenticated');
+        }
+
+        try {
+            const response = await axios.delete(`${baseUrl}/api/sessions/all`, {
+                headers: {
+                    'authorization': `Bearer ${accessToken}`,
+                    'pr0d-app-id': appId
+                }
+            });
+            return response.data.data;
+        } catch (error: any) {
+            console.error('Error revoking all sessions:', error);
+            throw new Error(error.response?.data?.message || 'Failed to revoke all sessions');
+        }
+    };
+
+    const revokeSession = async (sessionId: string): Promise<{ message: string }> => {
+        if (!accessToken) {
+            throw new Error('User not authenticated');
+        }
+
+        if (!sessionId) {
+            throw new Error('Session ID is required');
+        }
+
+        try {
+            const response = await axios.delete(`${baseUrl}/api/sessions/${sessionId}`, {
+                headers: {
+                    'authorization': `Bearer ${accessToken}`,
+                    'pr0d-app-id': appId
+                }
+            });
+            return response.data.data;
+        } catch (error: any) {
+            console.error('Error revoking session:', error);
+            throw new Error(error.response?.data?.message || 'Failed to revoke session');
+        }
+    };
+
     const contextValue: AuthContextType = {
         accessToken,
         isAuthenticated: !!accessToken,
@@ -1854,11 +1977,14 @@ Issued At: ${components.issuedAt}`;
         listPasskeys,
         deletePasskey,
         getUser,
+        getPendingTransactions,
+        getAllSessions,
+        revokeAllSessions,
+        revokeSession,
         teeSignMessage,
         createTransaction,
         getTransaction,
         sponsorTransaction,
-        getPendingTransactions
     };
 
     return (
