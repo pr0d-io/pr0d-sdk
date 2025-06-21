@@ -269,12 +269,12 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
                     return Promise.reject(error);
                 }
 
-                if(error.response?.data?.message === 'Authorization token: revoked') {
+                if (error.response?.data?.message === 'Authorization token: revoked') {
                     localStorage.removeItem('pr0d:access_token');
+                    setAccessToken(null);
                     localStorage.removeItem('pr0d:refresh_token');
                     setRefreshToken(null);
                     setUser(null);
-                    setAccessToken(null);
                     return Promise.reject(error);
                 }
 
@@ -338,10 +338,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
         setError(null);
 
         try {
-            const res = await axios.post(`${baseUrl}/api/email/init`,
-                { email },
-                { headers: { 'pr0d-app-id': appId } }
-            );
+            await sendEmailCode(email);
             setStep('code');
             setTimeout(() => {
                 if (inputRefs.current[0]) {
@@ -354,6 +351,56 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
             setLoading(false);
         }
     };
+
+    const sendEmailCode = async (email: string) => {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const res = await axios.post(`${baseUrl}/api/email/init`, { email }, { headers: { 'pr0d-app-id': appId } });
+                resolve(res.data.data);
+            } catch (e: any) {
+                reject(e);
+            }
+        });
+    }
+
+    const loginWithEmailCode = async (email: string, code: string) => {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const res = await axios.post(`${baseUrl}/api/email/auth`, { email, code }, { headers: { 'pr0d-app-id': appId } });
+                handleTokens(res.data.data.access_token, res.data.data.refresh_token, true);
+                resolve(res.data.data);
+            } catch (e: any) {
+                reject(e);
+            }
+        });
+    }
+
+    // Headless version that doesn't trigger UI side effects
+    const loginWithEmailCodeHeadless = async (email: string, code: string) => {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const res = await axios.post(`${baseUrl}/api/email/auth`, { email, code }, { headers: { 'pr0d-app-id': appId } });
+                resolve(res.data.data);
+            } catch (e: any) {
+                reject(e);
+            }
+        });
+    }
+
+    const loginWithProvider = async (provider: string) => {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const res = await axios.get(`${baseUrl}/api/${provider}/init`, {
+                    headers: { 'pr0d-app-id': appId },
+                    params: { redirect_uri: window.location.href }
+                });
+                const authUrl = res.data.data;
+                window.location.href = authUrl;
+            } catch (e: any) {
+                reject(e);
+            }
+        });
+    }
 
     const handleCodeInput = (index: number, value: string) => {
         if (/^[0-9]?$/.test(value)) {
@@ -422,11 +469,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
         setError(null);
 
         try {
-            const res = await axios.post(`${baseUrl}/api/email/auth`,
-                { email, code: codeToVerify },
-                { headers: { 'pr0d-app-id': appId } }
-            );
-            handleTokens(res.data.data.access_token, res.data.data.refresh_token, true);
+            const res = await loginWithEmailCode(email, codeToVerify);
             setShowPopup({ show: false });
             setStep('email');
             setCode(['', '', '', '', '', '']);
@@ -1031,7 +1074,7 @@ Issued At: ${components.issuedAt}`;
 
     // Trigger wallet signature when walletAuthData is set
     useEffect(() => {
-        if (walletAuthData && userInitiatedWalletAuth && !walletAuthCompleted) {    
+        if (walletAuthData && userInitiatedWalletAuth && !walletAuthCompleted) {
             handleWalletSignature();
         }
     }, [walletAuthData, userInitiatedWalletAuth, walletAuthCompleted]);
@@ -2017,6 +2060,10 @@ Issued At: ${components.issuedAt}`;
         createTransaction,
         getTransaction,
         sponsorTransaction,
+        sendEmailCode,
+        loginWithEmailCode,
+        loginWithEmailCodeHeadless,
+        loginWithProvider,
     };
 
     return (

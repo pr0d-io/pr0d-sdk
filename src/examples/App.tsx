@@ -324,6 +324,176 @@ const CustomLoginButton = () => {
   );
 };
 
+const DirectLoginButtons = () => {
+  const { loginWithProvider, initPasskey, verifyPasskey, login } = usePr0d();
+  const [loading, setLoading] = React.useState<string | null>(null);
+
+  const handleDirectProviderLogin = async (provider: string) => {
+    setLoading(provider);
+    try {
+      await loginWithProvider(provider);
+    } catch (error) {
+      console.error(`Failed to login with ${provider}:`, error);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleDirectPasskeyLogin = async () => {
+    setLoading('passkey');
+    try {
+      // Get authentication options from backend
+      const { options } = await initPasskey();
+      
+      // Format the options for WebAuthn API
+      const formatPasskeyOptions = (options: any) => {
+        const base64urlToUint8Array = (base64url: string): Uint8Array => {
+          const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+          const padded = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
+          const binary = atob(padded);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          return bytes;
+        };
+
+        return {
+          ...options,
+          challenge: base64urlToUint8Array(options.challenge),
+          allowCredentials: options.allowCredentials?.map((cred: any) => ({
+            ...cred,
+            id: base64urlToUint8Array(cred.id)
+          })) || []
+        };
+      };
+
+      const formattedOptions = formatPasskeyOptions(options);
+
+      // Trigger passkey authentication
+      const credential = await navigator.credentials.get({
+        publicKey: formattedOptions
+      });
+
+      if (credential) {
+        await verifyPasskey(credential);
+      }
+    } catch (error) {
+      console.error('Failed to login with passkey:', error);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  // For wallet login, we'll use the regular login popup since wallet auth is complex
+  const handleDirectWalletLogin = async () => {
+    login(); // This will open the popup, but user can immediately click wallet
+  };
+
+  return (
+    <div style={styles.directLoginContainer}>
+      <h3 style={styles.directLoginTitle}>Or login directly with:</h3>
+      
+      <div style={styles.directLoginButtons}>
+        <button
+          onClick={() => handleDirectProviderLogin('google')}
+          disabled={loading === 'google'}
+          style={{
+            ...styles.directLoginButton,
+            ...styles.googleButton,
+            opacity: loading === 'google' ? 0.7 : 1
+          }}
+        >
+          {loading === 'google' ? (
+            <>
+              <div style={styles.spinner}></div>
+              <span style={{ marginLeft: 8 }}>Connecting...</span>
+            </>
+          ) : (
+            'Google'
+          )}
+        </button>
+
+        <button
+          onClick={() => handleDirectProviderLogin('discord')}
+          disabled={loading === 'discord'}
+          style={{
+            ...styles.directLoginButton,
+            ...styles.discordButton,
+            opacity: loading === 'discord' ? 0.7 : 1
+          }}
+        >
+          {loading === 'discord' ? (
+            <>
+              <div style={styles.spinner}></div>
+              <span style={{ marginLeft: 8 }}>Connecting...</span>
+            </>
+          ) : (
+            'Discord'
+          )}
+        </button>
+
+        <button
+          onClick={() => handleDirectProviderLogin('x')}
+          disabled={loading === 'x'}
+          style={{
+            ...styles.directLoginButton,
+            ...styles.xButton,
+            opacity: loading === 'x' ? 0.7 : 1
+          }}
+        >
+          {loading === 'x' ? (
+            <>
+              <div style={styles.spinner}></div>
+              <span style={{ marginLeft: 8 }}>Connecting...</span>
+            </>
+          ) : (
+            'X (Twitter)'
+          )}
+        </button>
+
+        <button
+          onClick={handleDirectPasskeyLogin}
+          disabled={loading === 'passkey'}
+          style={{
+            ...styles.directLoginButton,
+            ...styles.passkeyButton,
+            opacity: loading === 'passkey' ? 0.7 : 1
+          }}
+        >
+          {loading === 'passkey' ? (
+            <>
+              <div style={styles.spinner}></div>
+              <span style={{ marginLeft: 8 }}>Authenticating...</span>
+            </>
+          ) : (
+            'Passkey'
+          )}
+        </button>
+
+        <button
+          onClick={handleDirectWalletLogin}
+          disabled={loading === 'wallet'}
+          style={{
+            ...styles.directLoginButton,
+            ...styles.walletButton,
+            opacity: loading === 'wallet' ? 0.7 : 1
+          }}
+        >
+          {loading === 'wallet' ? (
+            <>
+              <div style={styles.spinner}></div>
+              <span style={{ marginLeft: 8 }}>Connecting...</span>
+            </>
+          ) : (
+            'Wallet'
+          )}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const CustomMfaSetupButton = () => {
   const { triggerMfaSetup } = usePr0d();
   return (
@@ -1304,6 +1474,7 @@ const AppContent = () => {
         <div style={styles.welcome}>
           <h2>Authentication Demo</h2>
           <CustomLoginButton />
+          <DirectLoginButtons />
         </div>
       )}
     </div>
@@ -1841,6 +2012,58 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     fontWeight: 500,
     transition: 'all 0.2s ease'
+  },
+  directLoginContainer: {
+    marginTop: 30,
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    border: '1px solid #e9ecef'
+  },
+  directLoginTitle: {
+    margin: '0 0 20px 0',
+    fontSize: 18,
+    color: '#333',
+    textAlign: 'center'
+  },
+  directLoginButtons: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+    gap: 12,
+    justifyContent: 'center'
+  },
+  directLoginButton: {
+    padding: '12px 16px',
+    border: 'none',
+    borderRadius: 6,
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 600,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.2s ease',
+    minHeight: 44
+  },
+  googleButton: {
+    backgroundColor: '#4285F4',
+    color: '#fff'
+  },
+  discordButton: {
+    backgroundColor: '#5865F2',
+    color: '#fff'
+  },
+  xButton: {
+    backgroundColor: '#1DA1F2',
+    color: '#fff'
+  },
+  passkeyButton: {
+    backgroundColor: '#9b59b6',
+    color: '#fff'
+  },
+  walletButton: {
+    backgroundColor: '#fd7e14',
+    color: '#fff'
   },
   passkeysSection: {
     marginBottom: 30,
