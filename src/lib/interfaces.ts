@@ -74,10 +74,6 @@ export interface AuthContextType {
     revokeAllSessions: () => Promise<{ message: string; revokedCount: number }>;
     revokeSession: (sessionId: string) => Promise<{ message: string }>;
     teeSignMessage: (message: string) => Promise<{ signature: string; address: string; message: string }>;
-    createTransaction: (txData: { to: string; value?: string; data?: string; gasLimit?: string; maxFeePerGas?: string; maxPriorityFeePerGas?: string; chainId: number }) => Promise<{ transactionId: string; userAddress: string; txData: any; expiresAt: string }>;
-    getTransaction: (transactionId: string) => Promise<{ transactionId: string; userAddress: string; txData: any; status: string; createdAt: string; sponsorTxHash?: string }>;
-    sponsorTransaction: (transactionId: string, sponsorPrivateKey: string, rpcUrl: string, nonce?: number) => Promise<{ txHash: string; sponsorAddress: string; status: string; transactionId: string }>;
-    getPendingTransactions: () => Promise<{ transactions: any[]; count: number }>;
     sendEmailCode: (email: string) => Promise<any>;
     loginWithEmailCode: (email: string, code: string) => Promise<any>;
     loginWithEmailCodeHeadless: (email: string, code: string) => Promise<any>;

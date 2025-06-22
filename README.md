@@ -38,29 +38,89 @@ createRoot(document.getElementById('root')).render(
 ### 2. Use the authentication hook
 
 ```jsx
-import React from 'react';
+import React, { useState } from 'react';
 import { usePr0d } from 'pr0d-sdk';
 
 function Dashboard() {
   const { 
     isAuthenticated, 
     user, 
-    login, 
     logout,
     ready,
-    triggerEmailLink,
+    sendEmailCode,
+    loginWithEmailCode,
   } = usePr0d();
+
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // Wait for SDK to be ready
   if (!ready) {
     return <div>Loading...</div>;
   }
 
+  const handleSendCode = async () => {
+    if (!email) return;
+    
+    setLoading(true);
+    try {
+      await sendEmailCode(email);
+      setCodeSent(true);
+    } catch (error) {
+      console.error('Failed to send email code:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogin = async () => {
+    if (!email || !code) return;
+    
+    setLoading(true);
+    try {
+      await loginWithEmailCode(email, code);
+    } catch (error) {
+      console.error('Login failed:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div>
         <h1>Welcome to MyApp</h1>
-        <button onClick={login}>Login with Pr0d</button>
+        {!codeSent ? (
+          <div>
+            <input
+              type="email"
+              placeholder="Enter your email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <button onClick={handleSendCode} disabled={loading || !email}>
+              {loading ? 'Sending...' : 'Send Code'}
+            </button>
+          </div>
+        ) : (
+          <div>
+            <p>Code sent to {email}</p>
+            <input
+              type="text"
+              placeholder="Enter verification code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
+            <button onClick={handleLogin} disabled={loading || !code}>
+              {loading ? 'Logging in...' : 'Login'}
+            </button>
+            <button onClick={() => setCodeSent(false)}>
+              Use different email
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -69,9 +129,6 @@ function Dashboard() {
     <div>
       <h1>Welcome, {user?.email?.email || 'User'}!</h1>
       <button onClick={logout}>Logout</button>
-      {!user?.email?.email && (
-        <button onClick={() => triggerEmailLink()}>Link your email</button>
-      )}
     </div>
   );
 }
@@ -206,6 +263,23 @@ interface TransactionData {
 ```
 
 ## Common Usage Patterns
+
+### Email Code Login Flow
+
+```jsx
+const handleEmailCodeLogin = async (email, code) => {
+  try {
+    // Step 1: Send verification code to email
+    await sendEmailCode(email);
+    
+    // Step 2: User enters code from email and logs in
+    const result = await loginWithEmailCode(email, code);
+    console.log('Login successful:', result);
+  } catch (error) {
+    console.error('Email code login failed:', error.message);
+  }
+};
+```
 
 ### Error Handling
 

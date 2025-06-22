@@ -11,6 +11,8 @@ import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
 import CloseIcon from '@mui/icons-material/Close';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
+import FingerprintJS from '@fingerprintjs/fingerprintjs';
+
 
 import { AppConfig, User, AuthContextType } from './interfaces';
 import { Spinner, FocusableButton, WalletStatusCircle, ProviderStatusCircle } from './components';
@@ -20,7 +22,7 @@ import axios from 'axios';
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string; children: React.ReactNode, appConfig: AppConfig | null }) => {
+const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initialVisitorId }: { appId: string; children: React.ReactNode, appConfig: AppConfig | null, visitorId: string | null }) => {
 
     const baseUrl = 'https://auth.pr0d.io';
     const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -39,6 +41,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
     const [error, setError] = useState<string | null>(null);
     const [appConfig, setAppConfig] = useState<AppConfig | null>(initialAppConfig);
     const [ready, setReady] = useState<boolean>(!!initialAppConfig);
+    const [visitorId, setVisitorId] = useState<string | null>(initialVisitorId);
     const qrCodeRef = useRef<HTMLDivElement>(null);
 
     const { address, isConnected } = useAccount();
@@ -142,33 +145,114 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
         inputRefs.current = inputRefs.current.slice(0, 6);
     }, []);
 
+    // Generate visitor ID using FingerprintJS
+    useEffect(() => {
+        const generateVisitorId = async () => {
+            try {
+                const fp = await FingerprintJS.load();
+                const result = await fp.get();
+                setVisitorId(result.visitorId);
+            } catch (error) {
+                setVisitorId('0');
+            }
+        };
+
+        generateVisitorId();
+    }, []);
+
     useEffect(() => {
         mfaInputRefs.current = mfaInputRefs.current.slice(0, 6);
     }, []);
 
     useEffect(() => {
-        // Check if passkeys are supported
-        const checkPasskeySupport = () => {
-            if (window.PublicKeyCredential &&
-                typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function') {
-                window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
-                    .then((available) => setIsPasskeySupported(available))
-                    .catch(() => setIsPasskeySupported(false));
-            } else {
-                setIsPasskeySupported(false);
-            }
-        };
+        const requestInterceptor = axios.interceptors.request.use(
+            config => {
+                if (config.url?.includes(baseUrl)) {
+                    config.headers = config.headers || {};
+                    if (appConfig?.id) {
+                        config.headers['pr0d-app-id'] = appConfig.id;
+                    }
+                    if (visitorId) {
+                        config.headers['pr0d-visitor-id'] = visitorId;
+                    }
+                }
+                return config;
+            },
+            error => Promise.reject(error)
+        );
 
-        checkPasskeySupport();
-    }, []);
+
+
+        const responseInterceptor = axios.interceptors.response.use(
+            response => response,
+            async error => {
+                const originalRequest = error.config;
+
+                // Avoid retrying refresh token requests to prevent infinite loops
+                if (originalRequest.url?.includes('/api/sessions/refresh')) {
+                    return Promise.reject(error);
+                }
+
+                if (error.response?.data?.message === 'Authorization token: revoked') {
+                    localStorage.removeItem('pr0d:access_token');
+                    setAccessToken(null);
+                    localStorage.removeItem('pr0d:refresh_token');
+                    setRefreshToken(null);
+                    setUser(null);
+                    return Promise.reject(error);
+                }
+
+                if (error.response?.status === 401 && !originalRequest._retry) {
+                    originalRequest._retry = true;
+                    if (localStorage.getItem('pr0d:access_token')) {
+                        try {
+                            const currentRefreshToken = localStorage.getItem('pr0d:refresh_token');
+                            if (!currentRefreshToken) {
+                                throw new Error("No refresh token found");
+                            }
+                            const res = await axios.post(`${baseUrl}/api/sessions/refresh`, { refresh_token: currentRefreshToken });
+
+                            const newAccessToken = res.data.data.access_token;
+                            const newRefreshToken = res.data.data.refresh_token;
+
+                            if (newAccessToken) {
+                                localStorage.setItem('pr0d:access_token', newAccessToken);
+                                setAccessToken(newAccessToken);
+                            }
+                            if (newRefreshToken) {
+                                localStorage.setItem('pr0d:refresh_token', newRefreshToken);
+                                setRefreshToken(newRefreshToken);
+                            }
+
+                            originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+                            return axios(originalRequest);
+                        } catch (refreshError) {
+                            localStorage.removeItem('pr0d:access_token');
+                            localStorage.removeItem('pr0d:refresh_token');
+                            setRefreshToken(null);
+                            setUser(null);
+                            setAccessToken(null);
+                            return Promise.reject(refreshError);
+                        }
+                    } else {
+                        setAccessToken(null);
+                    }
+                }
+                return Promise.reject(error);
+            }
+        );
+
+        return () => {
+            axios.interceptors.response.eject(responseInterceptor);
+            axios.interceptors.request.eject(requestInterceptor);
+        };
+    }, [appId, baseUrl, setAccessToken, setRefreshToken, setUser, visitorId]);
 
     useEffect(() => {
         if (!initialAppConfig) {
             const fetchAppConfig = async () => {
                 try {
-                    const res = await axios.get(`${baseUrl}/api/apps/${appId}`, {
-                        headers: { 'pr0d-app-id': appId }
-                    });
+                    const res = await axios.get(`${baseUrl}/api/apps/${appId}`);
                     setAppConfig(res.data.data);
                     setReady(true);
                 } catch (error) {
@@ -180,26 +264,6 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
             fetchAppConfig();
         }
     }, [appId, initialAppConfig]);
-
-    useEffect(() => {
-        try {
-            const accessToken = localStorage.getItem('pr0d:access_token');
-            if (accessToken) {
-                const decodedToken = jwtDecode(accessToken);
-                if (!decodedToken.exp || decodedToken.exp < Date.now() / 1000) {
-                    localStorage.removeItem('pr0d:access_token');
-                    setAccessToken(null);
-                    setUser(null);
-                    refreshSession();
-                } else {
-                    setAccessToken(accessToken);
-                    getUser(accessToken);
-                }
-            }
-        } catch (error) {
-            console.error('Failed to decode token:', error);
-        }
-    }, []);
 
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -236,6 +300,42 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
         }
     }, []);
 
+    useEffect(() => {
+        // Check if passkeys are supported
+        const checkPasskeySupport = () => {
+            if (window.PublicKeyCredential &&
+                typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function') {
+                window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+                    .then((available) => setIsPasskeySupported(available))
+                    .catch(() => setIsPasskeySupported(false));
+            } else {
+                setIsPasskeySupported(false);
+            }
+        };
+
+        checkPasskeySupport();
+    }, []);
+
+    useEffect(() => {
+        try {
+            const accessToken = localStorage.getItem('pr0d:access_token');
+            if (accessToken) {
+                const decodedToken = jwtDecode(accessToken);
+                if (!decodedToken.exp || decodedToken.exp < Date.now() / 1000) {
+                    localStorage.removeItem('pr0d:access_token');
+                    setAccessToken(null);
+                    setUser(null);
+                    refreshSession();
+                } else {
+                    setAccessToken(accessToken);
+                    getUser(accessToken);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to decode token:', error);
+        }
+    }, []);
+
     const handleTokens = (accessToken: string, refreshToken: string, updateUser: boolean = false) => {
         if (accessToken) {
             localStorage.setItem('pr0d:access_token', accessToken);
@@ -253,75 +353,10 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
     const refreshSession = async () => {
         const refreshToken = localStorage.getItem('pr0d:refresh_token');
         if (refreshToken) {
-            const res = await axios.post(`${baseUrl}/api/sessions/refresh`, { refresh_token: refreshToken }, { headers: { 'pr0d-app-id': appId } });
+            const res = await axios.post(`${baseUrl}/api/sessions/refresh`, { refresh_token: refreshToken });
             handleTokens(res.data.data.access_token, res.data.data.refresh_token, false);
         }
     }
-
-    useEffect(() => {
-        const responseInterceptor = axios.interceptors.response.use(
-            response => response,
-            async error => {
-                const originalRequest = error.config;
-
-                // Avoid retrying refresh token requests to prevent infinite loops
-                if (originalRequest.url?.includes('/api/sessions/refresh')) {
-                    return Promise.reject(error);
-                }
-
-                if (error.response?.data?.message === 'Authorization token: revoked') {
-                    localStorage.removeItem('pr0d:access_token');
-                    setAccessToken(null);
-                    localStorage.removeItem('pr0d:refresh_token');
-                    setRefreshToken(null);
-                    setUser(null);
-                    return Promise.reject(error);
-                }
-
-                if (error.response?.status === 401 && !originalRequest._retry) {
-                    originalRequest._retry = true;
-                    if (localStorage.getItem('pr0d:access_token')) {
-                        try {
-                            const currentRefreshToken = localStorage.getItem('pr0d:refresh_token');
-                            if (!currentRefreshToken) {
-                                throw new Error("No refresh token found");
-                            }
-                            const res = await axios.post(`${baseUrl}/api/sessions/refresh`, { refresh_token: currentRefreshToken }, { headers: { 'pr0d-app-id': appId } });
-
-                            const newAccessToken = res.data.data.access_token;
-                            const newRefreshToken = res.data.data.refresh_token;
-
-                            if (newAccessToken) {
-                                localStorage.setItem('pr0d:access_token', newAccessToken);
-                                setAccessToken(newAccessToken);
-                            }
-                            if (newRefreshToken) {
-                                localStorage.setItem('pr0d:refresh_token', newRefreshToken);
-                                setRefreshToken(newRefreshToken);
-                            }
-
-                            originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
-                            return axios(originalRequest);
-                        } catch (refreshError) {
-                            localStorage.removeItem('pr0d:access_token');
-                            localStorage.removeItem('pr0d:refresh_token');
-                            setRefreshToken(null);
-                            setUser(null);
-                            setAccessToken(null);
-                            return Promise.reject(refreshError);
-                        }
-                    } else {
-                        setAccessToken(null);
-                    }
-                }
-                return Promise.reject(error);
-            }
-        );
-
-        return () => {
-            axios.interceptors.response.eject(responseInterceptor);
-        };
-    }, [appId, baseUrl, setAccessToken, setRefreshToken, setUser]);
 
     const handleInitEmail = async () => {
         if (!email) {
@@ -355,7 +390,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
     const sendEmailCode = async (email: string) => {
         return new Promise(async (resolve, reject) => {
             try {
-                const res = await axios.post(`${baseUrl}/api/email/init`, { email }, { headers: { 'pr0d-app-id': appId } });
+                const res = await axios.post(`${baseUrl}/api/email/init`, { email });
                 resolve(res.data.data);
             } catch (e: any) {
                 reject(e);
@@ -366,7 +401,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
     const loginWithEmailCode = async (email: string, code: string) => {
         return new Promise(async (resolve, reject) => {
             try {
-                const res = await axios.post(`${baseUrl}/api/email/auth`, { email, code }, { headers: { 'pr0d-app-id': appId } });
+                const res = await axios.post(`${baseUrl}/api/email/auth`, { email, code });
                 handleTokens(res.data.data.access_token, res.data.data.refresh_token, true);
                 resolve(res.data.data);
             } catch (e: any) {
@@ -379,7 +414,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
     const loginWithEmailCodeHeadless = async (email: string, code: string) => {
         return new Promise(async (resolve, reject) => {
             try {
-                const res = await axios.post(`${baseUrl}/api/email/auth`, { email, code }, { headers: { 'pr0d-app-id': appId } });
+                const res = await axios.post(`${baseUrl}/api/email/auth`, { email, code });
                 resolve(res.data.data);
             } catch (e: any) {
                 reject(e);
@@ -391,7 +426,6 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
         return new Promise(async (resolve, reject) => {
             try {
                 const res = await axios.get(`${baseUrl}/api/${provider}/init`, {
-                    headers: { 'pr0d-app-id': appId },
                     params: { redirect_uri: window.location.href }
                 });
                 const authUrl = res.data.data;
@@ -486,7 +520,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
         if (refreshToken) {
             try {
                 await axios.delete(`${baseUrl}/api/sessions/revoke`, {
-                    headers: { 'pr0d-app-id': appId, 'authorization': `Bearer ${accessToken}` },
+                    headers: { 'authorization': `Bearer ${accessToken}` },
                     data: { refresh_token: refreshToken }
                 });
             } catch (e: any) {
@@ -504,7 +538,6 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
     const exchangeCodeForToken = async (code: string) => {
         try {
             const res = await axios.get(`${baseUrl}/api/oauth/exchange`, {
-                headers: { 'pr0d-app-id': appId },
                 params: { code }
             });
             handleTokens(res.data.data.access_token, res.data.data.refresh_token, true);
@@ -521,7 +554,6 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
     const exchangeOAuthCode = async (code: string, provider: string) => {
         try {
             const res = await axios.get(`${baseUrl}/api/oauth/exchange`, {
-                headers: { 'pr0d-app-id': appId },
                 params: { code }
             });
             handleTokens(res.data.data.access_token, res.data.data.refresh_token, true);
@@ -551,7 +583,6 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
                 {},
                 {
                     headers: {
-                        'pr0d-app-id': appId,
                         'authorization': `Bearer ${accessToken}`
                     }
                 }
@@ -574,7 +605,6 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
                 { code: mfaCode },
                 {
                     headers: {
-                        'pr0d-app-id': appId,
                         'authorization': `Bearer ${accessToken}`
                     }
                 }
@@ -598,7 +628,6 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
                 `${baseUrl}/api/mfa/delete`,
                 {
                     headers: {
-                        'pr0d-app-id': appId,
                         'authorization': `Bearer ${accessToken}`
                     }
                 }
@@ -628,8 +657,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
         setError(null);
 
         try {
-            const res = await axios.get(`${baseUrl}/api/${provider}/init`, {
-                headers: { 'pr0d-app-id': appId },
+            const res = await axios.get(`${baseUrl}/api/${provider}/init`, {    
                 params: { redirect_uri: window.location.href }
             });
             const authUrl = res.data.data;
@@ -912,7 +940,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
     // Initialize wallet authentication
     const initWalletAuth = async (address: string) => {
         try {
-            const headers: any = { 'pr0d-app-id': appId };
+            const headers: any = {};
 
             // Include Authorization header if user is authenticated (for linking)
             if (accessToken) {
@@ -943,8 +971,6 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig }: { appId: string;
             const res = await axios.post(`${baseUrl}/api/wallet/auth`, {
                 signature,
                 nonce
-            }, {
-                headers: { 'pr0d-app-id': appId }
             });
 
             handleTokens(res.data.data.access_token, res.data.data.refresh_token, true);
@@ -1401,7 +1427,6 @@ Issued At: ${components.issuedAt}`;
                 { email: email.trim().toLowerCase() },
                 {
                     headers: {
-                        'pr0d-app-id': appId,
                         'authorization': `Bearer ${accessToken}`
                     }
                 }
@@ -1452,7 +1477,6 @@ Issued At: ${components.issuedAt}`;
                 { email: email.trim().toLowerCase(), code },
                 {
                     headers: {
-                        'pr0d-app-id': appId,
                         'authorization': `Bearer ${accessToken}`
                     }
                 }
@@ -1502,7 +1526,6 @@ Issued At: ${components.issuedAt}`;
         try {
             const res = await axios.get(`${baseUrl}/api/${provider}/init`, {
                 headers: {
-                    'pr0d-app-id': appId,
                     'authorization': `Bearer ${accessToken}`
                 },
                 params: { redirect_uri: window.location.href }
@@ -1531,7 +1554,6 @@ Issued At: ${components.issuedAt}`;
         try {
             const res = await axios.delete(`${baseUrl}/api/${provider}/delete`, {
                 headers: {
-                    'pr0d-app-id': appId,
                     'authorization': `Bearer ${accessToken}`
                 }
             });
@@ -1553,7 +1575,6 @@ Issued At: ${components.issuedAt}`;
                 nonce
             }, {
                 headers: {
-                    'pr0d-app-id': appId,
                     'authorization': `Bearer ${accessToken}`
                 }
             });
@@ -1572,7 +1593,6 @@ Issued At: ${components.issuedAt}`;
         try {
             const res = await axios.delete(`${baseUrl}/api/wallet/delete`, {
                 headers: {
-                    'pr0d-app-id': appId,
                     'authorization': `Bearer ${accessToken}`
                 },
                 data: { address: walletAddress }
@@ -1744,7 +1764,6 @@ Issued At: ${components.issuedAt}`;
 
             const response = await axios.post(`${baseUrl}/api/passkeys/init`, body, {
                 headers: {
-                    'pr0d-app-id': appId,
                     ...(accessToken && { 'authorization': `Bearer ${accessToken}` })
                 }
             });
@@ -1766,7 +1785,6 @@ Issued At: ${components.issuedAt}`;
                 credential
             }, {
                 headers: {
-                    'pr0d-app-id': appId,
                     ...(accessToken && { 'authorization': `Bearer ${accessToken}` })
                 }
             });
@@ -1804,7 +1822,6 @@ Issued At: ${components.issuedAt}`;
         try {
             const response = await axios.get(`${baseUrl}/api/passkeys/list`, {
                 headers: {
-                    'pr0d-app-id': appId,
                     'authorization': `Bearer ${accessToken}`
                 }
             });
@@ -1826,7 +1843,6 @@ Issued At: ${components.issuedAt}`;
         try {
             await axios.delete(`${baseUrl}/api/passkeys/delete`, {
                 headers: {
-                    'pr0d-app-id': appId,
                     'authorization': `Bearer ${accessToken}`
                 },
                 data: { credentialId }
@@ -1847,7 +1863,6 @@ Issued At: ${components.issuedAt}`;
         try {
             const response = await axios.get(`${baseUrl}/api/sessions/user`, {
                 headers: {
-                    'pr0d-app-id': appId,
                     'authorization': `Bearer ${tokenToUse}`
                 }
             });
@@ -1884,79 +1899,12 @@ Issued At: ${components.issuedAt}`;
             const response = await axios.post(`${baseUrl}/api/tee/sign-message`, { message }, {
                 headers: {
                     'authorization': `Bearer ${accessToken}`,
-                    'pr0d-app-id': appId
                 }
             });
             return response.data.data;
         } catch (error: any) {
             console.error('Error signing message:', error);
             throw new Error(error.response?.data?.message || 'Failed to sign message');
-        }
-    };
-
-    const createTransaction = async (txData: { to: string; value?: string; data?: string; gasLimit?: string; maxFeePerGas?: string; maxPriorityFeePerGas?: string; chainId: number }): Promise<{ transactionId: string; userAddress: string; txData: any; expiresAt: string }> => {
-        if (!accessToken) {
-            throw new Error('User not authenticated');
-        }
-
-        try {
-            const response = await axios.post(`${baseUrl}/api/transactions/create`, txData, {
-                headers: {
-                    'authorization': `Bearer ${accessToken}`,
-                    'pr0d-app-id': appId
-                }
-            });
-            return response.data.data;
-        } catch (error: any) {
-            console.error('Error creating transaction:', error);
-            throw new Error(error.response?.data?.message || 'Failed to create transaction');
-        }
-    };
-
-    const getTransaction = async (transactionId: string): Promise<{ transactionId: string; userAddress: string; txData: any; status: string; createdAt: string; sponsorTxHash?: string }> => {
-        try {
-            const response = await axios.get(`${baseUrl}/api/transactions/${transactionId}`, {
-                headers: {
-                    'pr0d-app-id': appId
-                }
-            });
-            return response.data.data;
-        } catch (error: any) {
-            console.error('Error getting transaction:', error);
-            throw new Error(error.response?.data?.message || 'Failed to get transaction');
-        }
-    };
-
-    const sponsorTransaction = async (transactionId: string, sponsorPrivateKey: string, rpcUrl: string, nonce?: number): Promise<{ txHash: string; sponsorAddress: string; status: string; transactionId: string }> => {
-        try {
-            const response = await axios.post(`${baseUrl}/api/transactions/${transactionId}/sponsor`, { sponsorPrivateKey, rpcUrl, nonce }, {
-                headers: {
-                    'pr0d-app-id': appId
-                }
-            });
-            return response.data.data;
-        } catch (error: any) {
-            console.error('Error sponsoring transaction:', error);
-            throw new Error(error.response?.data?.message || 'Failed to sponsor transaction');
-        }
-    };
-
-    const getPendingTransactions = async (): Promise<{ transactions: any[]; count: number }> => {
-        if (!accessToken) {
-            throw new Error('User not authenticated');
-        }
-
-        try {
-            const response = await axios.get(`${baseUrl}/api/transactions/user/pending`, {
-                headers: {
-                    'authorization': `Bearer ${accessToken}`,
-                    'pr0d-app-id': appId
-                }
-            });
-            return response.data.data;
-        } catch (error: any) {
-            console.error('Error getting pending transactions:', error);
-            throw new Error(error.response?.data?.message || 'Failed to get pending transactions');
         }
     };
 
@@ -1969,7 +1917,6 @@ Issued At: ${components.issuedAt}`;
             const response = await axios.get(`${baseUrl}/api/sessions`, {
                 headers: {
                     'authorization': `Bearer ${accessToken}`,
-                    'pr0d-app-id': appId
                 }
             });
             return response.data.data;
@@ -1988,7 +1935,6 @@ Issued At: ${components.issuedAt}`;
             const response = await axios.delete(`${baseUrl}/api/sessions/all`, {
                 headers: {
                     'authorization': `Bearer ${accessToken}`,
-                    'pr0d-app-id': appId
                 }
             });
             return response.data.data;
@@ -2011,7 +1957,6 @@ Issued At: ${components.issuedAt}`;
             const response = await axios.delete(`${baseUrl}/api/sessions/${sessionId}`, {
                 headers: {
                     'authorization': `Bearer ${accessToken}`,
-                    'pr0d-app-id': appId
                 }
             });
             return response.data.data;
@@ -2052,14 +1997,10 @@ Issued At: ${components.issuedAt}`;
         listPasskeys,
         deletePasskey,
         getUser,
-        getPendingTransactions,
         getAllSessions,
         revokeAllSessions,
         revokeSession,
         teeSignMessage,
-        createTransaction,
-        getTransaction,
-        sponsorTransaction,
         sendEmailCode,
         loginWithEmailCode,
         loginWithEmailCodeHeadless,
@@ -3253,6 +3194,7 @@ const queryClient = new QueryClient();
 const Pr0dWithProviders = ({ appId, children }: { appId: string; children: React.ReactNode }) => {
     const [wagmiConfig, setWagmiConfig] = useState<Config | null>(null);
     const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
+    const [visitorId, setVisitorId] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchAppConfigAndCreateWagmi = async () => {
@@ -3271,6 +3213,14 @@ const Pr0dWithProviders = ({ appId, children }: { appId: string; children: React
             setWagmiConfig(newConfig);
         };
 
+        const generateVisitorId = async () => {
+            const fp = await FingerprintJS.load();
+            const result = await fp.get();
+            console.log(result);
+            setVisitorId(result.visitorId);
+        }
+
+        generateVisitorId();
         fetchAppConfigAndCreateWagmi();
     }, [appId]);
 
@@ -3281,7 +3231,7 @@ const Pr0dWithProviders = ({ appId, children }: { appId: string; children: React
     return (
         <WagmiProvider config={wagmiConfig}>
             <QueryClientProvider client={queryClient}>
-                <Pr0d appId={appId} appConfig={appConfig}>
+                <Pr0d appId={appId} appConfig={appConfig} visitorId={visitorId}>
                     {children}
                 </Pr0d>
             </QueryClientProvider>
