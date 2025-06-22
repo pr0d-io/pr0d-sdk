@@ -1,5 +1,4 @@
 import React, { useState, createContext, useContext, useEffect, useRef } from 'react';
-import QRCodeStyling from 'qr-code-styling';
 import { useAccount, useConnect, useDisconnect, useSignMessage, useSignTypedData, WagmiProvider, type Config } from 'wagmi';
 import { createWagmiConfig } from './wagmi';
 
@@ -11,8 +10,6 @@ import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
 import CloseIcon from '@mui/icons-material/Close';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
-import FingerprintJS from '@fingerprintjs/fingerprintjs';
-
 
 import { AppConfig, User, AuthContextType } from './interfaces';
 import { Spinner, FocusableButton, WalletStatusCircle, ProviderStatusCircle } from './components';
@@ -147,17 +144,20 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
 
     // Generate visitor ID using FingerprintJS
     useEffect(() => {
-        const generateVisitorId = async () => {
+        let isMounted = true;
+        async function generateVisitorId() {
             try {
+                const mod = await import('@fingerprintjs/fingerprintjs');
+                const FingerprintJS = mod.default;
                 const fp = await FingerprintJS.load();
                 const result = await fp.get();
-                setVisitorId(result.visitorId);
+                if (isMounted) setVisitorId(result.visitorId);
             } catch (error) {
-                setVisitorId('0');
+                if (isMounted) setVisitorId('0');
             }
-        };
-
+        }
         generateVisitorId();
+        return () => { isMounted = false; };
     }, []);
 
     useEffect(() => {
@@ -1175,78 +1175,80 @@ Issued At: ${components.issuedAt}`;
 
     // Generate QR code with rounded corners
     useEffect(() => {
-        if (qrCodeRef.current) {
-            let qrData = '';
-            let isWalletConnect = false;
-            let walletLogo = null;
-
-            // Check if this is for MFA
-            if (mfaStep === 'qr' && (mfaSecret || qrCodeUrl)) {
-                qrData = getTotpUrl() || '';
+        let isMounted = true;
+        async function loadAndRenderQR() {
+            let QRCodeStyling;
+            try {
+                const mod = await import('qr-code-styling');
+                QRCodeStyling = mod.default;
+            } catch (e) {
+                console.error('Failed to load qr-code-styling:', e);
+                return;
             }
-            // Check if this is for WalletConnect
-            else if (walletConnectUri) {
-                qrData = walletConnectUri;
-                isWalletConnect = true;
-
-                // Get the wallet icon from the connecting wallet
-                if (connectingWallet) {
-                    const matchingConnector = connectors.find(c => c.id === connectingWallet.id);
-                    if (matchingConnector && matchingConnector.icon) {
-                        walletLogo = matchingConnector.icon;
+            if (qrCodeRef.current) {
+                let qrData = '';
+                let isWalletConnect = false;
+                let walletLogo = null;
+                // ... existing code for determining qrData, isWalletConnect, walletLogo ...
+                if (mfaStep === 'qr' && (mfaSecret || qrCodeUrl)) {
+                    qrData = getTotpUrl() || '';
+                } else if (walletConnectUri) {
+                    qrData = walletConnectUri;
+                    isWalletConnect = true;
+                    if (connectingWallet) {
+                        const matchingConnector = connectors.find(c => c.id === connectingWallet.id);
+                        if (matchingConnector && matchingConnector.icon) {
+                            walletLogo = matchingConnector.icon;
+                        }
                     }
                 }
-            }
-
-            if (qrData) {
-                // Determine the image to use in QR code
-                let qrImage = undefined;
-
-                if (isWalletConnect && walletLogo) {
-                    qrImage = walletLogo;
-                } else if (!isWalletConnect) {
-                    qrImage = "data:image/svg+xml;base64," + btoa(`
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <circle cx="12" cy="12" r="12" fill="white"/>
-                            <path d="M12 1L3 5V11C3 16.55 6.84 21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1Z" fill="#666"/>
-                            <path d="M9 12L11 14L15 10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                    `);
-                }
-
-                const qrCode = new QRCodeStyling({
-                    width: 200,
-                    height: 200,
-                    type: "svg",
-                    data: qrData,
-                    image: qrImage,
-                    dotsOptions: {
-                        color: "#000000",
-                        type: "dots"
-                    },
-                    cornersSquareOptions: {
-                        color: "#000000",
-                        type: "extra-rounded"
-                    },
-                    cornersDotOptions: {
-                        color: "#000000",
-                        type: "dot"
-                    },
-                    backgroundOptions: {
-                        color: "#ffffff"
-                    },
-                    imageOptions: {
-                        crossOrigin: "anonymous",
-                        margin: 2,
-                        imageSize: (isWalletConnect && walletLogo) ? 0.2 : (!isWalletConnect ? 0.15 : 0)
+                if (qrData) {
+                    let qrImage = undefined;
+                    if (isWalletConnect && walletLogo) {
+                        qrImage = walletLogo;
+                    } else if (!isWalletConnect) {
+                        qrImage = "data:image/svg+xml;base64," + btoa(`
+                            <svg width=\"40\" height=\"40\" viewBox=\"0 0 24 24\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">
+                                <circle cx=\"12\" cy=\"12\" r=\"12\" fill=\"white\"/>
+                                <path d=\"M12 1L3 5V11C3 16.55 6.84 21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1Z\" fill=\"#666\"/>
+                                <path d=\"M9 12L11 14L15 10\" stroke=\"white\" strokeWidth=\"2\" strokeLinecap=\"round\" strokeLinejoin=\"round\"/>
+                            </svg>
+                        `);
                     }
-                });
-
-                // Clear previous QR code and append new one
-                qrCodeRef.current.innerHTML = '';
-                qrCode.append(qrCodeRef.current);
+                    const qrCode = new QRCodeStyling({
+                        width: 200,
+                        height: 200,
+                        type: "svg",
+                        data: qrData,
+                        image: qrImage,
+                        dotsOptions: {
+                            color: "#000000",
+                            type: "dots"
+                        },
+                        cornersSquareOptions: {
+                            color: "#000000",
+                            type: "extra-rounded"
+                        },
+                        cornersDotOptions: {
+                            color: "#000000",
+                            type: "dot"
+                        },
+                        backgroundOptions: {
+                            color: "#ffffff"
+                        },
+                        imageOptions: {
+                            crossOrigin: "anonymous",
+                            margin: 2,
+                            imageSize: (isWalletConnect && walletLogo) ? 0.2 : (!isWalletConnect ? 0.15 : 0)
+                        }
+                    });
+                    qrCodeRef.current.innerHTML = '';
+                    qrCode.append(qrCodeRef.current);
+                }
             }
         }
+        loadAndRenderQR();
+        return () => { isMounted = false; };
     }, [mfaStep, mfaSecret, qrCodeUrl, walletConnectUri, connectingWallet, connectors]);
 
     // Auto-focus first MFA input when reaching code step
@@ -3214,8 +3216,10 @@ const Pr0dWithProviders = ({ appId, children }: { appId: string; children: React
         };
 
         const generateVisitorId = async () => {
-            const fp = await FingerprintJS.load();
-            const result = await fp.get();
+            const fp = await import('@fingerprintjs/fingerprintjs');
+            const FingerprintJS = fp.default;
+            const fpInstance = await FingerprintJS.load();
+            const result = await fpInstance.get();
             console.log(result);
             setVisitorId(result.visitorId);
         }
