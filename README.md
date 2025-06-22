@@ -8,6 +8,14 @@ A comprehensive authentication SDK for React applications, providing wallet conn
 npm install pr0d-sdk
 ```
 
+## Peer Dependencies
+
+The SDK requires the following peer dependencies to be installed in your project:
+
+```bash
+npm install @mui/icons-material @mui/material @rainbow-me/rainbowkit @tanstack/react-query react react-dom viem wagmi
+```
+
 ## APP ID 
 
 Your app ID is the unique identifier for your app. It is used to fetch your app configuration and to authenticate users under your administration.
@@ -134,12 +142,6 @@ function Dashboard() {
 }
 ```
 
-## Prerequisites
-
-- React 18+
-- Modern browser with WebAuthn support (for passkeys)
-- HTTPS environment (required for passkeys and some OAuth providers)
-
 ## Configuration
 
 ### App Configuration
@@ -159,6 +161,7 @@ interface AppConfig {
   discord: boolean;
   telegram: boolean;
   apple: boolean;
+  walletConnect: string;
   options: {
     allowEmail: boolean;
     allowEmailPlus: boolean;
@@ -201,12 +204,17 @@ interface AuthContextType {
   setupMFA: () => Promise<{ secret: string; qrCodeUrl: string }>;
   verifyMFA: (code: string) => Promise<boolean>;
   deleteMFA: () => Promise<void>;
+  linkMFA: () => Promise<void>;
 
-  // Email Linking
+  // Email Methods
+  sendEmailCode: (email: string) => Promise<any>;
+  loginWithEmailCode: (email: string, code: string) => Promise<any>;
+  loginWithEmailCodeHeadless: (email: string, code: string) => Promise<any>;
   initEmailLink: (email: string) => Promise<void>;
   linkEmail: (email: string, code: string) => Promise<boolean>;
 
   // Social Provider Methods
+  loginWithProvider: (provider: string) => Promise<any>;
   linkProvider: (provider: 'google' | 'discord' | 'x') => Promise<void>;
   unlinkProvider: (provider: 'google' | 'discord' | 'x') => Promise<void>;
   linkGoogle: () => Promise<void>;
@@ -219,19 +227,21 @@ interface AuthContextType {
 
   // Passkey Methods
   initPasskey: (userHandle?: string) => Promise<{ options: any; type: 'registration' | 'authentication' }>;
-  verifyPasskey: (credential: any) => Promise<{ type: 'registration' | 'authentication'; user?: User; message: string }>;
+  verifyPasskey: (credential: any) => Promise<{ type: 'registration' | 'authentication'; user?: User; accessToken?: string; refreshToken?: string; message: string }>;
   listPasskeys: () => Promise<{ passkeys: any[]; count: number }>;
   deletePasskey: (credentialId: string) => Promise<void>;
+  linkPasskey: () => void;
 
   // User Management
   getUser: (token?: string) => Promise<User>;
 
+  // Session Management
+  getAllSessions: () => Promise<{ sessions: Session[]; totalCount: number }>;
+  revokeAllSessions: () => Promise<{ message: string; revokedCount: number }>;
+  revokeSession: (sessionId: string) => Promise<{ message: string }>;
+
   // Embedded Wallet
   teeSignMessage: (message: string) => Promise<{ signature: string; address: string; message: string }>;
-  createTransaction: (txData: TransactionData) => Promise<{ transactionId: string; userAddress: string; txData: any; expiresAt: string }>;
-  getTransaction: (transactionId: string) => Promise<{ transactionId: string; userAddress: string; txData: any; status: string; createdAt: string; sponsorTxHash?: string }>;
-  sponsorTransaction: (transactionId: string, sponsorPrivateKey: string, rpcUrl: string, nonce?: number) => Promise<{ txHash: string; sponsorAddress: string; status: string; transactionId: string }>;
-  getPendingTransactions: () => Promise<{ transactions: any[]; count: number }>;
 }
 ```
 
@@ -242,23 +252,16 @@ interface User {
   _id: string;
   email?: { email: string };
   mfa?: { secret: string };
-  google?: { email: string; name: string };
-  discord?: { username: string; id: string };
-  x?: { username: string; id: string };
-  wallets?: Array<{ address: string; first_verified_at: string }>;
-  passkeys?: Array<{ credentialID: string; deviceName?: string }>;
-  embeddedWallet?: { address: string };
   [key: string]: any;
 }
 
-interface TransactionData {
-  to: string;
-  value?: string;
-  data?: string;
-  gasLimit?: string;
-  maxFeePerGas?: string;
-  maxPriorityFeePerGas?: string;
-  chainId: number;
+interface Session {
+  id: string;
+  createdAt: string;
+  userAgent: string;
+  ipAddress: string;
+  expiresAt: string | null;
+  isCurrentSession: boolean;
 }
 ```
 
@@ -351,6 +354,27 @@ const handleProviderLink = async (provider) => {
 };
 ```
 
+### Session Management
+
+```jsx
+const handleSessionManagement = async () => {
+  try {
+    // Get all user sessions
+    const { sessions, totalCount } = await getAllSessions();
+    console.log(`Found ${totalCount} sessions:`, sessions);
+    
+    // Revoke a specific session
+    await revokeSession(sessionId);
+    
+    // Revoke all other sessions (keep current)
+    const { revokedCount } = await revokeAllSessions();
+    console.log(`Revoked ${revokedCount} sessions`);
+  } catch (error) {
+    console.error('Session management failed:', error.message);
+  }
+};
+```
+
 ## Environment Variables
 
 No environment variables required - just your `appId` which you get from the Pr0d dashboard.
@@ -363,6 +387,7 @@ No environment variables required - just your `appId` which you get from the Pr0
 2. **OAuth redirects failing**: Check your `allowedOrigins` in the dashboard
 3. **"User not authenticated" errors**: Always check `isAuthenticated` before calling authenticated methods
 4. **"App not found" errors**: Verify your `appId` is correct
+5. **Peer dependency errors**: Make sure all required peer dependencies are installed
 
 ### Browser Support
 
