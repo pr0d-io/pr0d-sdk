@@ -25,7 +25,8 @@ export default defineConfig({
         '@tanstack/react-query',
         '@simplewebauthn/browser',
         'jwt-decode',
-        'qr-code-styling'
+        'qr-code-styling',
+        '@fingerprintjs/fingerprintjs'
       ],
       output: {
         globals: {
