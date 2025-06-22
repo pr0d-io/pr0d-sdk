@@ -1,6 +1,6 @@
 {
   "name": "pr0d-sdk",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "main": "dist/pr0d-sdk.cjs.js",
   "module": "dist/pr0d-sdk.es.js",
   "types": "dist/index.d.ts",
