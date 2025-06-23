@@ -441,25 +441,6 @@ const DirectLoginButtons = () => {
             'Passkey'
           )}
         </button>
-
-        <button
-          onClick={handleDirectWalletLogin}
-          disabled={loading === 'wallet'}
-          style={{
-            ...styles.directLoginButton,
-            ...styles.walletButton,
-            opacity: loading === 'wallet' ? 0.7 : 1
-          }}
-        >
-          {loading === 'wallet' ? (
-            <>
-              <div style={styles.spinner}></div>
-              <span style={{ marginLeft: 8 }}>Connecting...</span>
-            </>
-          ) : (
-            'Wallet'
-          )}
-        </button>
       </div>
     </div>
   );
@@ -1153,7 +1134,7 @@ const PasskeysSection = () => {
 };
 
 const SessionsSection = () => {
-  const { getAllSessions, revokeAllSessions, revokeSession, user } = usePr0d();
+  const { getAllSessions, revokeAllSessions, revokeSession, user, visitorId } = usePr0d();
   const [sessions, setSessions] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
@@ -1429,6 +1410,21 @@ const App = () => {
   );
 };
 
+// Footer component that displays visitor ID for all states
+const Footer = () => {
+  const { visitorId } = usePr0d();
+
+  return (
+    <footer style={styles.footer}>
+      {visitorId && (
+        <div style={styles.visitorId}>
+          <p>Visitor ID: {visitorId}</p>
+        </div>
+      )}
+    </footer>
+  );
+};
+
 // The AppContent component that renders different content based on auth state
 const AppContent = () => {
   const { isAuthenticated } = usePr0d();
@@ -1448,6 +1444,8 @@ const AppContent = () => {
           <DirectLoginButtons />
         </div>
       )}
+
+      <Footer />
     </div>
   );
 };
@@ -1463,7 +1461,10 @@ const styles: Record<string, React.CSSProperties> = {
     paddingTop: 20,
     maxWidth: '80%',
     margin: '0 auto',
-    width: '100%'
+    width: '100%',
+    minHeight: '100vh',
+    display: 'flex',
+    flexDirection: 'column'
   },
   appHeader: {
     borderBottom: '1px solid #eee',
@@ -1475,13 +1476,15 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 40,
     backgroundColor: '#f9f9f9',
     borderRadius: 8,
-    marginTop: 40
+    marginTop: 40,
+    flex: 1
   },
   dashboard: {
     backgroundColor: '#fff',
     borderRadius: 8,
     padding: 20,
-    boxShadow: '0 2px 10px rgba(0,0,0,0.05)'
+    boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
+    flex: 1
   },
   header: {
     display: 'flex',
@@ -2285,6 +2288,18 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #ddd',
     marginBottom: 10,
     fontSize: 12
+  },
+  footer: {
+    marginTop: 'auto',
+    padding: '20px 0',
+    borderTop: '1px solid #eee',
+    backgroundColor: '#f8f9fa'
+  },
+  visitorId: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'Monaco, Consolas, "Courier New", monospace'
   }
 };
 

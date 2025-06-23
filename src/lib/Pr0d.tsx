@@ -1,4 +1,4 @@
-import React, { useState, createContext, useContext, useEffect, useRef } from 'react';
+import React, { useState, createContext, useContext, useEffect, useRef, useCallback } from 'react';
 import { useAccount, useConnect, useDisconnect, useSignMessage, useSignTypedData, WagmiProvider, type Config } from 'wagmi';
 import { createWagmiConfig } from './wagmi';
 
@@ -43,6 +43,9 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
 
     const { address, isConnected } = useAccount();
     const { connect, connectors: originalConnectors } = useConnect();
+
+    const isRefreshingToken = useRef(false);
+
 
 
     // Create customized connectors array
@@ -140,24 +143,6 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
 
     useEffect(() => {
         inputRefs.current = inputRefs.current.slice(0, 6);
-    }, []);
-
-    // Generate visitor ID using FingerprintJS
-    useEffect(() => {
-        let isMounted = true;
-        async function generateVisitorId() {
-            try {
-                const mod = await import('@fingerprintjs/fingerprintjs');
-                const FingerprintJS = mod.default;
-                const fp = await FingerprintJS.load();
-                const result = await fp.get();
-                if (isMounted) setVisitorId(result.visitorId);
-            } catch (error) {
-                if (isMounted) setVisitorId('0');
-            }
-        }
-        generateVisitorId();
-        return () => { isMounted = false; };
     }, []);
 
     useEffect(() => {
@@ -325,6 +310,36 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
         }
     }, []);
 
+    const refreshSession = async () => {
+        const refreshToken = localStorage.getItem('pr0d:refresh_token');
+        if (refreshToken) {
+            const res = await axios.post(`${baseUrl}/api/sessions/refresh`, { refresh_token: refreshToken });
+            handleTokens(res.data.data.access_token, res.data.data.refresh_token, false);
+        }
+    }
+
+    const REFRESH_BUFFER_SECONDS = 5 * 60; // 5 minutes
+
+    const checkAndRefreshToken = useCallback(async () => {
+        if (isRefreshingToken.current) return;
+        isRefreshingToken.current = true;
+        try {
+            const accessToken = localStorage.getItem('pr0d:access_token');
+            if (!accessToken) return;
+    
+            const decoded = jwtDecode(accessToken);
+            const now = Date.now() / 1000;
+    
+            if (!decoded.exp || decoded.exp - now < REFRESH_BUFFER_SECONDS) {
+                await refreshSession();
+            }
+        } catch (err) {
+            console.error('Token check failed:', err);
+        } finally {
+            isRefreshingToken.current = false;
+        }
+    }, [refreshSession]);
+
     useEffect(() => {
         const handleVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
@@ -334,7 +349,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
 
         const interval = setInterval(() => {
             checkAndRefreshToken();
-        }, 60 * 1000); // every 60 seconds
+        }, 60 * 1000); // Every 60 seconds
 
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -342,7 +357,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
             clearInterval(interval);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, []);
+    }, [checkAndRefreshToken]);
 
     useEffect(() => {
         const handleStorageChange = (event: StorageEvent) => {
@@ -389,33 +404,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
             setRefreshToken(refreshToken);
         }
     }
-
-    const refreshSession = async () => {
-        const refreshToken = localStorage.getItem('pr0d:refresh_token');
-        if (refreshToken) {
-            const res = await axios.post(`${baseUrl}/api/sessions/refresh`, { refresh_token: refreshToken });
-            handleTokens(res.data.data.access_token, res.data.data.refresh_token, false);
-        }
-    }
-
-    const REFRESH_BUFFER_SECONDS = 5 * 60; // 5 minutes
-
-    const checkAndRefreshToken = () => {
-        try {
-            const accessToken = localStorage.getItem('pr0d:access_token');
-            if (!accessToken) return;
-
-            const decoded = jwtDecode(accessToken);
-            const now = Date.now() / 1000;
-
-            if (!decoded.exp || decoded.exp - now < REFRESH_BUFFER_SECONDS) {
-                refreshSession();
-            }
-        } catch (err) {
-            console.error('Token check failed:', err);
-        }
-    };
-
+    
     const handleInitEmail = async () => {
         if (!email) {
             setError('Email is required');
@@ -2049,6 +2038,25 @@ Issued At: ${components.issuedAt}`;
         }
     };
 
+    const handleMobileDeepLink = async () => {
+        if (!walletConnectUri || !connectingWallet) return;
+    
+        const isOnMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        let deepLinkUrl = '';
+    
+        if (connectingWallet.name?.toLowerCase().includes('binance')) {
+            deepLinkUrl = `bnc://app.binance.com/cedefi/wc?uri=${encodeURIComponent(walletConnectUri)}`;
+        } else if (connectingWallet.name?.toLowerCase().includes('trust')) {
+            deepLinkUrl = `https://link.trustwallet.com/wc?uri=${encodeURIComponent(walletConnectUri)}`;
+        }
+    
+        if (deepLinkUrl && isOnMobile) {
+            window.location.href = deepLinkUrl; // Use direct redirect for better reliability
+        } else if (deepLinkUrl) {
+            window.open(deepLinkUrl, '_blank');
+        }
+    };
+
     const contextValue: AuthContextType = {
         accessToken,
         isAuthenticated: !!accessToken,
@@ -2090,6 +2098,7 @@ Issued At: ${components.issuedAt}`;
         loginWithEmailCodeHeadless,
         loginWithProvider,
         loginWithPasskey,
+        visitorId,
     };
 
     return (
@@ -2959,7 +2968,6 @@ Issued At: ${components.issuedAt}`;
                             ) : showPopup.view === 'wallet-connecting' && connectingWallet ? (
                                 <div style={styles.walletConnectingContainer}>
                                     {walletConnectUri ? (
-                                        // Show QR code for WalletConnect
                                         <div style={styles.walletConnectQrContainer}>
                                             <div style={styles.walletConnectQrCode}>
                                                 <div ref={qrCodeRef} style={styles.qrCodeWrapper}></div>
@@ -2988,49 +2996,14 @@ Issued At: ${components.issuedAt}`;
                                             <p style={styles.walletConnectingMessage}>
                                                 Open your mobile wallet and scan the QR code to connect.
                                             </p>
+                                            
 
                                             {/* Mobile Deep Link Button for Binance and Trust Wallet */}
                                             {(connectingWallet?.name?.toLowerCase().includes('binance') ||
                                                 connectingWallet?.name?.toLowerCase().includes('trust')) && (
                                                     <button
                                                         style={styles.mobileDeepLinkButton}
-                                                        onClick={() => {
-                                                            const isOnMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-                                                            if (walletConnectUri) {
-                                                                let deepLinkUrl = '';
-
-                                                                if (connectingWallet.name?.toLowerCase().includes('binance')) {
-                                                                    deepLinkUrl = `bnc://app.binance.com/cedefi/wc?uri=${encodeURIComponent(walletConnectUri)}`;
-                                                                } else if (connectingWallet.name?.toLowerCase().includes('trust')) {
-                                                                    deepLinkUrl = `https://link.trustwallet.com/wc?uri=${encodeURIComponent(walletConnectUri)}`;
-                                                                }
-
-                                                                if (deepLinkUrl) {
-                                                                    window.open(deepLinkUrl, '_blank');
-
-                                                                    // Set a timeout for wallet connection stabilization
-                                                                    // This timing AND the window.open calls are crucial for proper wallet connection and signing
-                                                                    setTimeout(() => {
-                                                                        // The window.open calls below provide necessary browser state changes
-                                                                        // that mobile wallets depend on for proper connection handling
-                                                                        if (isOnMobile) {
-                                                                            // Open blank pages instead of app stores to avoid user interruption
-                                                                            // but maintain the browser behavior that wallets expect
-                                                                            const dummyWindow1 = window.open('about:blank', '_blank');
-                                                                            const dummyWindow2 = window.open('about:blank', '_blank');
-
-                                                                            // Close the dummy windows immediately
-                                                                            setTimeout(() => {
-                                                                                if (dummyWindow1) dummyWindow1.close();
-                                                                                if (dummyWindow2) dummyWindow2.close();
-                                                                            }, 100);
-                                                                        }
-
-                                                                    }, 3000);
-                                                                }
-                                                            }
-                                                        }}
+                                                        onClick={handleMobileDeepLink}
                                                     >
                                                         <svg style={styles.mobileIcon} viewBox="0 0 24 24" fill="currentColor">
                                                             <path d="M17 19H7V5H17M17 1H7C5.89 1 5 1.89 5 3V21C5 22.1 5.89 23 7 23H17C18.1 23 19 22.1 19 21V3C19 1.89 18.1 1 17 1Z" />

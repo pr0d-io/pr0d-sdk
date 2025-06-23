@@ -80,6 +80,7 @@ export interface AuthContextType {
     loginWithEmailCodeHeadless: (email: string, code: string) => Promise<any>;
     loginWithProvider: (provider: string) => Promise<any>;
     loginWithPasskey: () => Promise<{ type: 'registration' | 'authentication'; user?: User; accessToken?: string; refreshToken?: string; message: string }>;
+    visitorId: string | null;
 }
 
 export interface FocusableButtonProps {
