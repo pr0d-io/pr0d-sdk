@@ -46,6 +46,7 @@ export interface AuthContextType {
     ready: boolean;
     logout: () => void;
     login: () => void;
+    refreshSession: () => Promise<void>;
     triggerMfaSetup: () => void;
     triggerEmailLink: () => void;
     triggerProviderLink: () => void;
@@ -78,6 +79,7 @@ export interface AuthContextType {
     loginWithEmailCode: (email: string, code: string) => Promise<any>;
     loginWithEmailCodeHeadless: (email: string, code: string) => Promise<any>;
     loginWithProvider: (provider: string) => Promise<any>;
+    loginWithPasskey: () => Promise<{ type: 'registration' | 'authentication'; user?: User; accessToken?: string; refreshToken?: string; message: string }>;
 }
 
 export interface FocusableButtonProps {

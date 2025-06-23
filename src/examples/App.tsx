@@ -325,8 +325,10 @@ const CustomLoginButton = () => {
 };
 
 const DirectLoginButtons = () => {
-  const { loginWithProvider, initPasskey, verifyPasskey, login } = usePr0d();
+  const { loginWithProvider, login, loginWithPasskey } = usePr0d();
   const [loading, setLoading] = React.useState<string | null>(null);
+  const [passkeyResult, setPasskeyResult] = React.useState<any>(null);
+  const [passkeyError, setPasskeyError] = React.useState<string | null>(null);
 
   const handleDirectProviderLogin = async (provider: string) => {
     setLoading(provider);
@@ -341,44 +343,13 @@ const DirectLoginButtons = () => {
 
   const handleDirectPasskeyLogin = async () => {
     setLoading('passkey');
+    setPasskeyResult(null);
+    setPasskeyError(null);
     try {
-      // Get authentication options from backend
-      const { options } = await initPasskey();
-      
-      // Format the options for WebAuthn API
-      const formatPasskeyOptions = (options: any) => {
-        const base64urlToUint8Array = (base64url: string): Uint8Array => {
-          const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
-          const padded = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
-          const binary = atob(padded);
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) {
-            bytes[i] = binary.charCodeAt(i);
-          }
-          return bytes;
-        };
-
-        return {
-          ...options,
-          challenge: base64urlToUint8Array(options.challenge),
-          allowCredentials: options.allowCredentials?.map((cred: any) => ({
-            ...cred,
-            id: base64urlToUint8Array(cred.id)
-          })) || []
-        };
-      };
-
-      const formattedOptions = formatPasskeyOptions(options);
-
-      // Trigger passkey authentication
-      const credential = await navigator.credentials.get({
-        publicKey: formattedOptions
-      });
-
-      if (credential) {
-        await verifyPasskey(credential);
-      }
-    } catch (error) {
+      const result = await loginWithPasskey();
+      setPasskeyResult(result);
+    } catch (error: any) {
+      setPasskeyError(error.message || 'Failed to login with passkey');
       console.error('Failed to login with passkey:', error);
     } finally {
       setLoading(null);

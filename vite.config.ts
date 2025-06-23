@@ -35,7 +35,8 @@ export default defineConfig({
           axios: 'axios',
           wagmi: 'wagmi',
           viem: 'viem'
-        }
+        },
+        inlineDynamicImports: true
       }
     },
     outDir: 'dist'

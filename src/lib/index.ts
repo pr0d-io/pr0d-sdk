@@ -1,5 +1,6 @@
 "use client";
-import Pr0d, { usePr0d } from './Pr0d';
+import { Pr0dProvider } from './Pr0dProvider';
+import { usePr0d } from './Pr0d';
 
-export { usePr0d };
-export default Pr0d; 
+export { Pr0dProvider, usePr0d };
+export default Pr0dProvider;

@@ -210,21 +210,10 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
                             if (!currentRefreshToken) {
                                 throw new Error("No refresh token found");
                             }
-                            const res = await axios.post(`${baseUrl}/api/sessions/refresh`, { refresh_token: currentRefreshToken });
 
-                            const newAccessToken = res.data.data.access_token;
-                            const newRefreshToken = res.data.data.refresh_token;
+                            await refreshSession();
 
-                            if (newAccessToken) {
-                                localStorage.setItem('pr0d:access_token', newAccessToken);
-                                setAccessToken(newAccessToken);
-                            }
-                            if (newRefreshToken) {
-                                localStorage.setItem('pr0d:refresh_token', newRefreshToken);
-                                setRefreshToken(newRefreshToken);
-                            }
-
-                            originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+                            originalRequest.headers['Authorization'] = `Bearer ${localStorage.getItem('pr0d:access_token')}`;
                             return axios(originalRequest);
                         } catch (refreshError) {
                             localStorage.removeItem('pr0d:access_token');
@@ -336,9 +325,60 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
         }
     }, []);
 
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                checkAndRefreshToken();
+            }
+        };
+
+        const interval = setInterval(() => {
+            checkAndRefreshToken();
+        }, 60 * 1000); // every 60 seconds
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, []);
+
+    useEffect(() => {
+        const handleStorageChange = (event: StorageEvent) => {
+            if (event.key === 'pr0d:access_token') {
+                if (!event.newValue) {
+                    // Logged out or access token cleared
+                    setAccessToken(null);
+                    setUser(null);
+                } else {
+                    // Token updated in another tab
+                    setAccessToken(event.newValue);
+                    getUser(event.newValue);
+                }
+            }
+
+            if (event.key === 'pr0d:refresh_token') {
+                if (!event.newValue) {
+                    setRefreshToken(null);
+                } else {
+                    setRefreshToken(event.newValue);
+                }
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+        };
+    }, []);
+
+
     const handleTokens = (accessToken: string, refreshToken: string, updateUser: boolean = false) => {
         if (accessToken) {
             localStorage.setItem('pr0d:access_token', accessToken);
+            console.log('Setting access token');
             setAccessToken(accessToken);
             if (updateUser) {
                 getUser(accessToken);
@@ -357,6 +397,24 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
             handleTokens(res.data.data.access_token, res.data.data.refresh_token, false);
         }
     }
+
+    const REFRESH_BUFFER_SECONDS = 5 * 60; // 5 minutes
+
+    const checkAndRefreshToken = () => {
+        try {
+            const accessToken = localStorage.getItem('pr0d:access_token');
+            if (!accessToken) return;
+
+            const decoded = jwtDecode(accessToken);
+            const now = Date.now() / 1000;
+
+            if (!decoded.exp || decoded.exp - now < REFRESH_BUFFER_SECONDS) {
+                refreshSession();
+            }
+        } catch (err) {
+            console.error('Token check failed:', err);
+        }
+    };
 
     const handleInitEmail = async () => {
         if (!email) {
@@ -657,7 +715,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
         setError(null);
 
         try {
-            const res = await axios.get(`${baseUrl}/api/${provider}/init`, {    
+            const res = await axios.get(`${baseUrl}/api/${provider}/init`, {
                 params: { redirect_uri: window.location.href }
             });
             const authUrl = res.data.data;
@@ -1968,6 +2026,29 @@ Issued At: ${components.issuedAt}`;
         }
     };
 
+    const loginWithPasskey = async () => {
+        // Check for passkey support
+        if (!window.PublicKeyCredential || typeof navigator.credentials?.get !== 'function') {
+            throw new Error('Passkeys are not supported on this device');
+        }
+        try {
+            // Get authentication options from backend
+            const { options } = await initPasskey();
+            const formattedOptions = formatPasskeyOptions(options);
+            // Trigger passkey authentication
+            const credential = await navigator.credentials.get({
+                publicKey: formattedOptions
+            });
+            if (!credential) {
+                throw new Error('No credential returned from passkey authentication');
+            }
+            // Verify with backend
+            return await verifyPasskey(credential);
+        } catch (err: any) {
+            throw new Error(err.message || 'Failed to login with passkey');
+        }
+    };
+
     const contextValue: AuthContextType = {
         accessToken,
         isAuthenticated: !!accessToken,
@@ -1975,6 +2056,7 @@ Issued At: ${components.issuedAt}`;
         ready,
         logout,
         login,
+        refreshSession,
         triggerMfaSetup,
         triggerEmailLink,
         triggerProviderLink,
@@ -2007,6 +2089,7 @@ Issued At: ${components.issuedAt}`;
         loginWithEmailCode,
         loginWithEmailCodeHeadless,
         loginWithProvider,
+        loginWithPasskey,
     };
 
     return (
@@ -3220,7 +3303,6 @@ const Pr0dWithProviders = ({ appId, children }: { appId: string; children: React
             const FingerprintJS = fp.default;
             const fpInstance = await FingerprintJS.load();
             const result = await fpInstance.get();
-            console.log(result);
             setVisitorId(result.visitorId);
         }
 
