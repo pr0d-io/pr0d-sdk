@@ -162,20 +162,26 @@ export const getStyles = (appConfig: AppConfig | null): Record<string, React.CSS
             position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
             backdropFilter: 'blur(3px)',
             WebkitBackdropFilter: 'blur(3px)', // Safari support
-            backgroundColor: 'rgba(255, 255, 255, 0.05)',
+            backgroundColor: 'rgba(0, 0, 0, 0.3)',
             display: 'flex', justifyContent: 'center', alignItems: 'center',
             zIndex: 9999,
             opacity: 1,
             transition: 'opacity 0.3s ease-out'
         },
         modal: {
-            backgroundColor: backgroundColor, borderRadius: 16, padding: 24, width: 320, textAlign: 'center', position: 'relative',
+            backgroundColor: backgroundColor, 
+            borderRadius: 16, 
+            padding: 24, 
+            width: 320, 
+            textAlign: 'center', 
+            position: 'relative',
             transform: 'translateY(0)',
             transition: 'all 0.3s ease-out',
             color: textColor,
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", "SF Pro Display", Roboto, "Helvetica Neue", Arial, sans-serif',
             WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale'
+            MozOsxFontSmoothing: 'grayscale',
+            border: isLightColor(backgroundColor) ? '1px solid rgba(0, 0, 0, 0.1)' : 'none'
         },
         close: {
             position: 'absolute',
@@ -218,6 +224,9 @@ export const getStyles = (appConfig: AppConfig | null): Record<string, React.CSS
         title: {
             fontSize: 18, fontWeight: 500, marginBottom: 8, color: textColor
         },
+        titleSmall: {
+            fontSize: 14, fontWeight: 500, marginBottom: 8, color: textColor
+        },
         inputContainer: {
             position: 'relative',
             width: '100%',
@@ -228,14 +237,14 @@ export const getStyles = (appConfig: AppConfig | null): Record<string, React.CSS
             left: 16,
             top: '50%',
             transform: 'translateY(-50%)',
-            width: 16,
-            height: 16,
+            width: 20,
+            height: 20,
             pointerEvents: 'none',
             zIndex: 1
         },
         inputField: {
             width: '100%',
-            padding: '14px 80px 14px 44px',
+            padding: '14px 80px 14px 48px',
             fontSize: 15,
             border: `1px solid ${isLightColor(backgroundColor) ? '#e5e7eb' : '#636363'}`,
             borderRadius: 12,
@@ -403,13 +412,13 @@ export const getStyles = (appConfig: AppConfig | null): Record<string, React.CSS
             marginBottom: 12
         },
         copyIcon: {
-            width: 16,
-            height: 16,
+            width: 20,
+            height: 20,
             flexShrink: 0
         },
         providerIcon: {
-            width: 16,
-            height: 16,
+            width: 20,
+            height: 20,
             flexShrink: 0
         },
         backArrow: {
@@ -525,8 +534,8 @@ export const getStyles = (appConfig: AppConfig | null): Record<string, React.CSS
             fontWeight: 500
         },
         checkIcon: {
-            width: 16,
-            height: 16,
+            width: 20,
+            height: 20,
         },
         passkeyIcon: {
             display: 'flex',

@@ -215,8 +215,8 @@ interface AuthContextType {
 
   // Social Provider Methods
   loginWithProvider: (provider: string) => Promise<any>;
-  linkProvider: (provider: 'google' | 'discord' | 'x') => Promise<void>;
-  unlinkProvider: (provider: 'google' | 'discord' | 'x') => Promise<void>;
+  linkProvider: (provider: 'google' | 'discord' | 'x' | 'github') => Promise<void>;
+unlinkProvider: (provider: 'google' | 'discord' | 'x' | 'github') => Promise<void>;
   linkGoogle: () => Promise<void>;
   linkDiscord: () => Promise<void>;
   linkX: () => Promise<void>;

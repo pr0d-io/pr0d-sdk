@@ -25,7 +25,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
     const [accessToken, setAccessToken] = useState<string | null>(null);
     const [refreshToken, setRefreshToken] = useState<string | null>(null);
     const [user, setUser] = useState<User | null>(null);
-    const [showPopup, setShowPopup] = useState<{ show: boolean; view?: 'loginorsignup' | 'wallet' | 'wallet-link' | 'wallet-connecting' | 'wallet-signing' | 'wallet-success' | 'wallet-error' | 'mfa' | 'link' | 'provider' | 'oauth-error' | 'oauth-loading' | 'passkey-loading' | 'passkey-signing' | 'passkey-error' }>({ show: false });
+    const [showPopup, setShowPopup] = useState<{ show: boolean; view?: 'loginorsignup' | 'wallet' | 'wallet-link' | 'wallet-connecting' | 'wallet-signing' | 'wallet-success' | 'wallet-login-success' | 'wallet-error' | 'mfa' | 'link' | 'provider' | 'oauth-error' | 'oauth-loading' | 'passkey-loading' | 'passkey-signing' | 'passkey-error' }>({ show: false });
     const [oauthError, setOauthError] = useState<{ provider: string; state: string; errorMessage: string | null } | null>(null);
     const [oauthLoading, setOauthLoading] = useState<{ provider: string } | null>(null);
     const [passkeyError, setPasskeyError] = useState<string | null>(null);
@@ -120,7 +120,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
     const [walletConnectedSuccessfully, setWalletConnectedSuccessfully] = useState(false);
     const [focusedInput, setFocusedInput] = useState<string | null>(null);
     const [isTransitioning, setIsTransitioning] = useState(false);
-    const [nextView, setNextView] = useState<{ show: boolean; view?: 'loginorsignup' | 'wallet' | 'wallet-link' | 'wallet-connecting' | 'wallet-signing' | 'wallet-success' | 'wallet-error' | 'mfa' | 'link' | 'provider' | 'oauth-error' | 'oauth-loading' | 'passkey-loading' | 'passkey-signing' | 'passkey-error' } | null>(null);
+    const [nextView, setNextView] = useState<{ show: boolean; view?: 'loginorsignup' | 'wallet' | 'wallet-link' | 'wallet-connecting' | 'wallet-signing' | 'wallet-success' | 'wallet-login-success' | 'wallet-error' | 'mfa' | 'link' | 'provider' | 'oauth-error' | 'oauth-loading' | 'passkey-loading' | 'passkey-signing' | 'passkey-error' } | null>(null);
     const [currentView, setCurrentView] = useState(showPopup);
     const [hoveredButton, setHoveredButton] = useState<string | null>(null);
     const [focusedButton, setFocusedButton] = useState<string | null>(null);
@@ -129,7 +129,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
     const styles = React.useMemo(() => getStyles(appConfig), [appConfig]);
 
     // Smooth transition function for changing popup views
-    const transitionToView = (newView: { show: boolean; view?: 'loginorsignup' | 'wallet' | 'wallet-link' | 'wallet-connecting' | 'wallet-signing' | 'wallet-success' | 'wallet-error' | 'mfa' | 'link' | 'provider' | 'oauth-error' | 'oauth-loading' | 'passkey-loading' | 'passkey-signing' | 'passkey-error' }) => {
+    const transitionToView = (newView: { show: boolean; view?: 'loginorsignup' | 'wallet' | 'wallet-link' | 'wallet-connecting' | 'wallet-signing' | 'wallet-success' | 'wallet-login-success' | 'wallet-error' | 'mfa' | 'link' | 'provider' | 'oauth-error' | 'oauth-loading' | 'passkey-loading' | 'passkey-signing' | 'passkey-error' }) => {
         if (isTransitioning) return; // Prevent multiple transitions
 
         setIsTransitioning(true);
@@ -326,10 +326,10 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
         try {
             const accessToken = localStorage.getItem('pr0d:access_token');
             if (!accessToken) return;
-    
+
             const decoded = jwtDecode(accessToken);
             const now = Date.now() / 1000;
-    
+
             if (!decoded.exp || decoded.exp - now < REFRESH_BUFFER_SECONDS) {
                 await refreshSession();
             }
@@ -404,7 +404,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
             setRefreshToken(refreshToken);
         }
     }
-    
+
     const handleInitEmail = async () => {
         if (!email) {
             setError('Email is required');
@@ -1022,7 +1022,13 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
 
             handleTokens(res.data.data.access_token, res.data.data.refresh_token, true);
 
-            closePopup();
+            // Show success message before closing
+            setShowPopup({ show: true, view: 'wallet-login-success' });
+
+            // Wait 1 second then close
+            setTimeout(() => {
+                closePopup();
+            }, 1000);
 
             // Mark wallet auth as completed to prevent re-triggering
             setWalletAuthCompleted(true);
@@ -1558,7 +1564,7 @@ Issued At: ${components.issuedAt}`;
      * await linkProvider('x');
      * ```
      */
-    const linkProvider = async (provider: 'google' | 'discord' | 'x'): Promise<void> => {
+    const linkProvider = async (provider: 'google' | 'discord' | 'x' | 'github'): Promise<void> => {
         if (!accessToken) {
             throw new Error('User must be authenticated to link provider');
         }
@@ -1586,7 +1592,7 @@ Issued At: ${components.issuedAt}`;
         }
     };
 
-    const unlinkProvider = async (provider: 'google' | 'discord' | 'x'): Promise<void> => {
+    const unlinkProvider = async (provider: 'google' | 'discord' | 'x' | 'github'): Promise<void> => {
         if (!accessToken) {
             throw new Error('User must be authenticated to unlink provider');
         }
@@ -1671,6 +1677,10 @@ Issued At: ${components.issuedAt}`;
 
     const linkDiscord = async (): Promise<void> => {
         return linkProvider('discord');
+    };
+
+    const linkGithub = async (): Promise<void> => {
+        return linkProvider('github');
     };
 
     const linkX = async (): Promise<void> => {
@@ -2040,16 +2050,16 @@ Issued At: ${components.issuedAt}`;
 
     const handleMobileDeepLink = async () => {
         if (!walletConnectUri || !connectingWallet) return;
-    
+
         const isOnMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         let deepLinkUrl = '';
-    
+
         if (connectingWallet.name?.toLowerCase().includes('binance')) {
             deepLinkUrl = `bnc://app.binance.com/cedefi/wc?uri=${encodeURIComponent(walletConnectUri)}`;
         } else if (connectingWallet.name?.toLowerCase().includes('trust')) {
             deepLinkUrl = `https://link.trustwallet.com/wc?uri=${encodeURIComponent(walletConnectUri)}`;
         }
-    
+
         if (deepLinkUrl && isOnMobile) {
             window.location.href = deepLinkUrl; // Use direct redirect for better reliability
         } else if (deepLinkUrl) {
@@ -2083,6 +2093,7 @@ Issued At: ${components.issuedAt}`;
         unlinkWallet,
         linkGoogle,
         linkDiscord,
+        linkGithub,
         linkX,
         initPasskey,
         verifyPasskey,
@@ -2210,14 +2221,9 @@ Issued At: ${components.issuedAt}`;
                                     </button>
                                 )}
 
-                            {showPopup.view == 'loginorsignup' && step === 'email' ? <h3 style={styles.title}>Log in or sign up</h3> : null}
+                            {showPopup.view == 'loginorsignup' && step === 'email' ? <p style={styles.titleSmall}>Log in or sign up</p> : null}
                             {showPopup.view == 'loginorsignup' && step === 'code' ? <h3 style={styles.title}>Enter confirmation code</h3> : null}
-                            {showPopup.view == 'wallet' ? <h3 style={styles.title}>{isWalletLinking ? 'Link Wallet' : 'Connect Wallet'}</h3> : null}
-                            {showPopup.view == 'wallet-connecting' ? <h3 style={styles.title}>Requesting Connection</h3> : null}
-                            {showPopup.view == 'wallet-signing' ? <h3 style={styles.title}>Sign to verify</h3> : null}
-
-                            {showPopup.view == 'wallet-success' ? <h3 style={styles.title}>Wallet Connected</h3> : null}
-                            {showPopup.view == 'wallet-error' ? <h3 style={styles.title}>Connection Failed</h3> : null}
+                            {showPopup.view == 'wallet' ? <h3 style={styles.titleSmall}>{isWalletLinking ? 'Link Wallet' : 'Log in or sign up'}</h3> : null}
                             {showPopup.view == 'link' && step === 'email' ? <h3 style={styles.title}>Link your Email</h3> : null}
                             {showPopup.view == 'link' && step === 'code' ? <h3 style={styles.title}>Enter confirmation code</h3> : null}
                             {showPopup.view == 'provider' ? <h3 style={styles.title}>Link Social Account</h3> : null}
@@ -2707,6 +2713,32 @@ Issued At: ${components.issuedAt}`;
                                                     ) : 'Discord'}
                                                 </FocusableButton>
                                             )}
+                                            {appConfig?.github && (
+                                                <FocusableButton
+                                                    id="github-login"
+                                                    style={{
+                                                        ...styles.altButton,
+                                                    }}
+                                                    onClick={() => handleProviderLogin('github')}
+                                                    disabled={loading}
+                                                    focusedButton={focusedButton}
+                                                    setFocusedButton={setFocusedButton}
+                                                    hoveredButton={hoveredButton}
+                                                    setHoveredButton={setHoveredButton}
+                                                    appConfig={appConfig}
+                                                    hoverBackgroundColor={isLightColor(appConfig?.background || '#ffffff') ? '#f8f9fa' : '#3a3a3a'}
+                                                    defaultBackgroundColor={isLightColor(appConfig?.background || '#ffffff') ? '#ffffff' : '#2a2a2a'}
+                                                >
+                                                    <svg style={styles.providerIcon} viewBox="0 0 24 24" fill="currentColor">
+                                                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                                                    </svg>
+                                                    {loading ? (
+                                                        <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                                                            <Spinner size={16} />
+                                                        </div>
+                                                    ) : 'GitHub'}
+                                                </FocusableButton>
+                                            )}
 
 
 
@@ -2838,6 +2870,11 @@ Issued At: ${components.issuedAt}`;
                                                 <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                                             </svg>
                                         )}
+                                        {oauthError.provider === 'github' && (
+                                            <svg style={styles.providerIconLarge} viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                                            </svg>
+                                        )}
 
                                     </div>
                                     <h3 style={styles.oauthErrorTitle}>Authentication failed</h3>
@@ -2857,7 +2894,7 @@ Issued At: ${components.issuedAt}`;
                                             setTimeout(() => {
                                                 if (accessToken) {
                                                     // User is authenticated, this should be a link operation
-                                                    linkProvider(oauthError.provider as 'google' | 'discord' | 'x').catch((error) => {
+                                                    linkProvider(oauthError.provider as 'google' | 'discord' | 'x' | 'github').catch((error) => {
                                                         setOauthError({ provider: oauthError.provider, state: 'retry_failed', errorMessage: 'Retry failed' });
                                                         setShowPopup({ show: true, view: 'oauth-error' });
                                                         setOauthLoading(null);
@@ -2996,7 +3033,7 @@ Issued At: ${components.issuedAt}`;
                                             <p style={styles.walletConnectingMessage}>
                                                 Open your mobile wallet and scan the QR code to connect.
                                             </p>
-                                            
+
 
                                             {/* Mobile Deep Link Button for Binance and Trust Wallet */}
                                             {(connectingWallet?.name?.toLowerCase().includes('binance') ||
@@ -3026,7 +3063,7 @@ Issued At: ${components.issuedAt}`;
                                                 {(connectingWallet.name?.toLowerCase().includes('walletconnect') ||
                                                     connectingWallet.name?.toLowerCase().includes('trust')) ?
                                                     'Generating QR Code...' :
-                                                    `Opening ${connectingWallet.name}`
+                                                    `Waiting for ${connectingWallet.name}`
                                                 }
                                             </h3>
                                             <p style={styles.walletConnectingMessage}>
@@ -3049,6 +3086,9 @@ Issued At: ${components.issuedAt}`;
                                         connectingWallet={connectingWallet}
                                         hasLoadingAnimation={true}
                                     />
+                                    <h3 style={styles.walletConnectingTitle}>
+                                        Sign to verify
+                                    </h3>
                                     <p style={styles.walletSigningMessage}>
                                         Don't see your wallet? Check your other browser windows.
                                     </p>
@@ -3057,21 +3097,30 @@ Issued At: ${components.issuedAt}`;
                             ) : showPopup.view === 'wallet-success' && connectingWallet ? (
                                 <div style={styles.walletConnectingContainer}>
                                     <WalletStatusCircle
+                                        status="loading"
+                                        walletName={connectingWallet.name}
+                                        connectors={connectors}
+                                        connectingWallet={connectingWallet}
+                                        hasLoadingAnimation={true}
+                                    />
+                                    <h3 style={styles.walletConnectingTitle}>
+                                        Connected to {connectingWallet.name}
+                                    </h3>
+                                    <p style={styles.walletGeneratingChallenge}>
+                                        {address && `Address: ${address.slice(0, 6)}...${address.slice(-4)}`}
+                                    </p>
+                                </div>
+                            ) : showPopup.view === 'wallet-login-success' && connectingWallet ? (
+                                <div style={styles.walletConnectingContainer}>
+                                    <WalletStatusCircle
                                         status="success"
                                         walletName={connectingWallet.name}
                                         connectors={connectors}
                                         connectingWallet={connectingWallet}
                                     />
-                                    <p style={styles.walletConnectingMessage}>
-                                        Successfully connected to {connectingWallet.name}
-                                    </p>
-                                    <p style={styles.walletConnectingSubMessage}>
-                                        {address && `Address: ${address.slice(0, 6)}...${address.slice(-4)}`}
-                                    </p>
-                                    <div style={styles.walletGeneratingChallenge}>
-                                        <span>Generating challenge</span>
-                                    </div>
-                                    <Spinner size={16} />
+                                    <h3 style={styles.walletConnectingTitle}>
+                                        Successfully connected {walletConnectUri ? 'with' : 'to'} {connectingWallet.name}
+                                    </h3>
                                 </div>
                             ) : showPopup.view === 'wallet-error' ? (
                                 <div style={styles.walletErrorContainer}>
@@ -3113,11 +3162,11 @@ Issued At: ${components.issuedAt}`;
                                 <div style={styles.oauthLoadingContainer}>
                                     <ProviderStatusCircle
                                         status="loading"
-                                        provider={oauthLoading.provider as 'google' | 'discord' | 'x'}
+                                        provider={oauthLoading.provider as 'google' | 'discord' | 'x' | 'github'}
                                         hasLoadingAnimation={true}
                                     />
                                     <h3 style={styles.oauthLoadingTitle}>
-                                        Verifying connection to {oauthLoading.provider === 'x' ? 'Twitter' : oauthLoading.provider.charAt(0).toUpperCase() + oauthLoading.provider.slice(1)}
+                                        Verifying connection to {oauthLoading.provider === 'x' ? 'Twitter' : oauthLoading.provider === 'github' ? 'GitHub' : oauthLoading.provider.charAt(0).toUpperCase() + oauthLoading.provider.slice(1)}
                                     </h3>
                                     <p style={styles.oauthLoadingMessage}>Just a few moments more</p>
                                 </div>

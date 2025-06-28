@@ -82,9 +82,10 @@ const Dashboard = () => {
         <LinkedProvidersDisplay />
         <CustomLinkProvidersButton />
         <div style={styles.individualLinkButtons}>
-          <CustomLinkGoogleButton />
-          <CustomLinkDiscordButton />
-          <CustomLinkXButton />
+                  <CustomLinkGoogleButton />
+        <CustomLinkDiscordButton />
+        <CustomLinkXButton />
+        <CustomLinkGithubButton />
         </div>
       </div>
 
@@ -114,13 +115,14 @@ const LinkedProvidersDisplay = () => {
   const providers = [
     { key: 'google', name: 'Google', color: '#4285F4' },
     { key: 'discord', name: 'Discord', color: '#5865F2' },
-    { key: 'x', name: 'X (Twitter)', color: '#1DA1F2' }
+    { key: 'x', name: 'X (Twitter)', color: '#1DA1F2' },
+    { key: 'github', name: 'GitHub', color: '#24292e' }
   ];
 
   const linkedProviders = providers.filter(provider => user?.[provider.key]);
   const hasLinkedProviders = linkedProviders.length > 0;
 
-  const handleUnlinkProvider = async (providerKey: 'google' | 'discord' | 'x') => {
+      const handleUnlinkProvider = async (providerKey: 'google' | 'discord' | 'x' | 'github') => {
     setUnlinkingProvider(providerKey);
     setError(null);
 
@@ -155,7 +157,7 @@ const LinkedProvidersDisplay = () => {
                     ...styles.unlinkButton,
                     opacity: unlinkingProvider === provider.key ? 0.7 : 1
                   }}
-                  onClick={() => handleUnlinkProvider(provider.key as 'google' | 'discord' | 'x')}
+                                              onClick={() => handleUnlinkProvider(provider.key as 'google' | 'discord' | 'x' | 'github')}
                   disabled={unlinkingProvider === provider.key}
                   title={`Unlink ${provider.name}`}
                 >
@@ -182,7 +184,7 @@ const CustomLinkProvidersButton = () => {
   // Check if there are any providers that could potentially be linked
   // This assumes the app might support these providers - the actual availability
   // will be checked in the provider linking popup based on app config
-  const hasUnlinkedProviders = !user?.google || !user?.discord || !user?.x;
+  const hasUnlinkedProviders = !user?.google || !user?.discord || !user?.x || !user?.github;
 
   if (!hasUnlinkedProviders) {
     return null; // Don't show button if all common providers are already linked
@@ -315,6 +317,46 @@ const CustomLinkXButton = () => {
   );
 };
 
+const CustomLinkGithubButton = () => {
+  const { linkGithub, user } = usePr0d();
+  const [linking, setLinking] = React.useState(false);
+
+  if (user?.github) {
+    return null; // Don't show if already linked
+  }
+
+  const handleLinkGithub = async () => {
+    setLinking(true);
+    try {
+      await linkGithub();
+    } catch (error) {
+      console.error('Failed to link GitHub:', error);
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleLinkGithub}
+      disabled={linking}
+      style={{
+        ...styles.customLinkGithubButton,
+        opacity: linking ? 0.7 : 1
+      }}
+    >
+      {linking ? (
+        <>
+          <div style={styles.spinner}></div>
+          <span style={{ marginLeft: 8 }}>Linking...</span>
+        </>
+      ) : (
+        'Link GitHub'
+      )}
+    </button>
+  );
+};
+
 const CustomLoginButton = () => {
   const { login } = usePr0d();
   return (
@@ -420,6 +462,25 @@ const DirectLoginButtons = () => {
             </>
           ) : (
             'X (Twitter)'
+          )}
+        </button>
+
+        <button
+          onClick={() => handleDirectProviderLogin('github')}
+          disabled={loading === 'github'}
+          style={{
+            ...styles.directLoginButton,
+            ...styles.githubButton,
+            opacity: loading === 'github' ? 0.7 : 1
+          }}
+        >
+          {loading === 'github' ? (
+            <>
+              <div style={styles.spinner}></div>
+              <span style={{ marginLeft: 8 }}>Connecting...</span>
+            </>
+          ) : (
+            'GitHub'
           )}
         </button>
 
@@ -1949,6 +2010,19 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'all 0.2s ease'
 
   },
+  customLinkGithubButton: {
+    padding: '8px 16px',
+    backgroundColor: '#24292e',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 5,
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 500,
+    display: 'flex',
+    alignItems: 'center',
+    transition: 'all 0.2s ease'
+  },
   linkMethodsSection: {
     marginBottom: 30,
     paddingBottom: 20,
@@ -2029,6 +2103,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   xButton: {
     backgroundColor: '#1DA1F2',
+    color: '#fff'
+  },
+  githubButton: {
+    backgroundColor: '#24292e',
     color: '#fff'
   },
   passkeyButton: {

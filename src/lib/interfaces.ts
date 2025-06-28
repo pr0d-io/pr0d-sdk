@@ -15,6 +15,7 @@ export interface AppConfig {
     x: boolean;
     google: boolean;
     discord: boolean;
+    github: boolean;
     telegram: boolean;
     apple: boolean;
     walletConnect: string;
@@ -24,6 +25,7 @@ export interface AppConfig {
         allowX: boolean;
         allowGoogle: boolean;
         allowDiscord: boolean;
+        allowGithub: boolean;
         allowTelegram: boolean;
         allowExternalWallets: boolean;
         allowPasskeys: boolean;
@@ -59,12 +61,13 @@ export interface AuthContextType {
     deleteMFA: () => Promise<void>;
     initEmailLink: (email: string) => Promise<void>;
     linkEmail: (email: string, code: string) => Promise<boolean>;
-    linkProvider: (provider: 'google' | 'discord' | 'x') => Promise<void>;
-    unlinkProvider: (provider: 'google' | 'discord' | 'x') => Promise<void>;
+    linkProvider: (provider: 'google' | 'discord' | 'x' | 'github') => Promise<void>;
+    unlinkProvider: (provider: 'google' | 'discord' | 'x' | 'github') => Promise<void>;
     linkWallet: (signature: string, nonce: string) => Promise<boolean>;
     unlinkWallet: (address: string) => Promise<void>;
     linkGoogle: () => Promise<void>;
     linkDiscord: () => Promise<void>;
+    linkGithub: () => Promise<void>;
     linkX: () => Promise<void>;
     initPasskey: (userHandle?: string) => Promise<{ options: any; type: 'registration' | 'authentication' }>;
     verifyPasskey: (credential: any) => Promise<{ type: 'registration' | 'authentication'; user?: User; accessToken?: string; refreshToken?: string; message: string }>;
@@ -119,6 +122,6 @@ export interface WalletStatusCircleProps {
 
 export interface ProviderCircleProps {
     status: 'success' | 'error' | 'loading';
-    provider: 'google' | 'discord' | 'x';
+    provider: 'google' | 'discord' | 'x' | 'github';
     hasLoadingAnimation?: boolean;
 }

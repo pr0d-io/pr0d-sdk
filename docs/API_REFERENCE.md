@@ -105,8 +105,8 @@ interface AuthContextType {
   
   // Social Provider Linking
   triggerProviderLink: () => void;
-  linkProvider: (provider: 'google' | 'discord' | 'x') => Promise<void>;
-  unlinkProvider: (provider: 'google' | 'discord' | 'x') => Promise<void>;
+  linkProvider: (provider: 'google' | 'discord' | 'x' | 'github') => Promise<void>;
+unlinkProvider: (provider: 'google' | 'discord' | 'x' | 'github') => Promise<void>;
   linkGoogle: () => Promise<void>;
   linkDiscord: () => Promise<void>;
   linkX: () => Promise<void>;
@@ -337,7 +337,7 @@ Links a social media account.
 const { linkProvider } = usePr0d();
 
 // Usage
-const linkSocial = async (provider: 'google' | 'discord' | 'x') => {
+const linkSocial = async (provider: 'google' | 'discord' | 'x' | 'github') => {
   try {
     await linkProvider(provider);
     console.log(`${provider} linked successfully`);
@@ -348,7 +348,7 @@ const linkSocial = async (provider: 'google' | 'discord' | 'x') => {
 ```
 
 **Parameters:**
-- `provider` ('google' | 'discord' | 'x'): Social provider to link
+- `provider` ('google' | 'discord' | 'x' | 'github'): Social provider to link
 
 #### `unlinkProvider(provider)`
 
@@ -358,7 +358,7 @@ Unlinks a social media account.
 const { unlinkProvider } = usePr0d();
 
 // Usage
-const unlinkSocial = async (provider: 'google' | 'discord' | 'x') => {
+const unlinkSocial = async (provider: 'google' | 'discord' | 'x' | 'github') => {
   try {
     await unlinkProvider(provider);
     console.log(`${provider} unlinked successfully`);
@@ -369,9 +369,9 @@ const unlinkSocial = async (provider: 'google' | 'discord' | 'x') => {
 ```
 
 **Parameters:**
-- `provider` ('google' | 'discord' | 'x'): Social provider to unlink
+- `provider` ('google' | 'discord' | 'x' | 'github'): Social provider to unlink
 
-#### `linkGoogle()`, `linkDiscord()`, `linkX()`
+#### `linkGoogle()`, `linkDiscord()`, `linkGithub()`, `linkX()`
 
 Convenience methods for linking specific providers.
 
