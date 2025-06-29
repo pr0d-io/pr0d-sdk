@@ -10,9 +10,11 @@ import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
 import CloseIcon from '@mui/icons-material/Close';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
+import SecurityIcon from '@mui/icons-material/Security';
 
 import { AppConfig, User, AuthContextType } from './interfaces';
-import { Spinner, FocusableButton, WalletStatusCircle, ProviderStatusCircle } from './components';
+import { Spinner, FocusableButton, WalletStatusCircle, ProviderStatusCircle, PasskeyStatusCircle } from './components';
 import { isValidEmail, base64urlToUint8Array, isLightColor, getLightAccentColor, getStyles } from './helpers';
 
 import axios from 'axios';
@@ -25,9 +27,10 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
     const [accessToken, setAccessToken] = useState<string | null>(null);
     const [refreshToken, setRefreshToken] = useState<string | null>(null);
     const [user, setUser] = useState<User | null>(null);
-    const [showPopup, setShowPopup] = useState<{ show: boolean; view?: 'loginorsignup' | 'wallet' | 'wallet-link' | 'wallet-connecting' | 'wallet-signing' | 'wallet-success' | 'wallet-login-success' | 'wallet-error' | 'mfa' | 'link' | 'provider' | 'oauth-error' | 'oauth-loading' | 'passkey-loading' | 'passkey-signing' | 'passkey-error' }>({ show: false });
+    const [showPopup, setShowPopup] = useState<{ show: boolean; view?: 'loginorsignup' | 'wallet' | 'wallet-link' | 'wallet-connecting' | 'wallet-signing' | 'wallet-success' | 'wallet-login-success' | 'wallet-error' | 'mfa' | 'link' | 'provider' | 'oauth-error' | 'oauth-loading' | 'oauth-success' | 'passkey-loading' | 'passkey-signing' | 'passkey-login-success' | 'passkey-error' }>({ show: false });
     const [oauthError, setOauthError] = useState<{ provider: string; state: string; errorMessage: string | null } | null>(null);
     const [oauthLoading, setOauthLoading] = useState<{ provider: string } | null>(null);
+    const [oauthSuccess, setOauthSuccess] = useState<{ provider: string } | null>(null);
     const [passkeyError, setPasskeyError] = useState<string | null>(null);
     const [isAnimating, setIsAnimating] = useState(false);
     const [email, setEmail] = useState('');
@@ -101,6 +104,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
     const [mfaSecret, setMfaSecret] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
     const [uriCopied, setUriCopied] = useState(false);
+    const [backupDownloaded, setBackupDownloaded] = useState(false);
     const [passkeyOptions, setPasskeyOptions] = useState<any>(null);
     const [isPasskeySupported, setIsPasskeySupported] = useState(false);
     const [passkeyLoading, setPasskeyLoading] = useState(false);
@@ -120,16 +124,17 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
     const [walletConnectedSuccessfully, setWalletConnectedSuccessfully] = useState(false);
     const [focusedInput, setFocusedInput] = useState<string | null>(null);
     const [isTransitioning, setIsTransitioning] = useState(false);
-    const [nextView, setNextView] = useState<{ show: boolean; view?: 'loginorsignup' | 'wallet' | 'wallet-link' | 'wallet-connecting' | 'wallet-signing' | 'wallet-success' | 'wallet-login-success' | 'wallet-error' | 'mfa' | 'link' | 'provider' | 'oauth-error' | 'oauth-loading' | 'passkey-loading' | 'passkey-signing' | 'passkey-error' } | null>(null);
+    const [nextView, setNextView] = useState<{ show: boolean; view?: 'loginorsignup' | 'wallet' | 'wallet-link' | 'wallet-connecting' | 'wallet-signing' | 'wallet-success' | 'wallet-login-success' | 'wallet-error' | 'mfa' | 'link' | 'provider' | 'oauth-error' | 'oauth-loading' | 'oauth-success' | 'passkey-loading' | 'passkey-signing' | 'passkey-login-success' | 'passkey-error' } | null>(null);
     const [currentView, setCurrentView] = useState(showPopup);
     const [hoveredButton, setHoveredButton] = useState<string | null>(null);
     const [focusedButton, setFocusedButton] = useState<string | null>(null);
+    const [recentConnectorId, setRecentConnectorId] = useState<string | null>(null);
 
     // Generate dynamic styles based on app config
     const styles = React.useMemo(() => getStyles(appConfig), [appConfig]);
 
     // Smooth transition function for changing popup views
-    const transitionToView = (newView: { show: boolean; view?: 'loginorsignup' | 'wallet' | 'wallet-link' | 'wallet-connecting' | 'wallet-signing' | 'wallet-success' | 'wallet-login-success' | 'wallet-error' | 'mfa' | 'link' | 'provider' | 'oauth-error' | 'oauth-loading' | 'passkey-loading' | 'passkey-signing' | 'passkey-error' }) => {
+    const transitionToView = (newView: { show: boolean; view?: 'loginorsignup' | 'wallet' | 'wallet-link' | 'wallet-connecting' | 'wallet-signing' | 'wallet-success' | 'wallet-login-success' | 'wallet-error' | 'mfa' | 'link' | 'provider' | 'oauth-error' | 'oauth-loading' | 'oauth-success' | 'passkey-loading' | 'passkey-signing' | 'passkey-login-success' | 'passkey-error' }) => {
         if (isTransitioning) return; // Prevent multiple transitions
 
         setIsTransitioning(true);
@@ -147,6 +152,25 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
 
     useEffect(() => {
         mfaInputRefs.current = mfaInputRefs.current.slice(0, 6);
+    }, []);
+
+    // Check for recent connector id from localStorage
+    useEffect(() => {
+        try {
+            const storedRecentConnectorId = localStorage.getItem('wagmi.recentConnectorId');
+            if (storedRecentConnectorId) {
+                // Parse the JSON if it's JSON-encoded, otherwise use as-is
+                let parsedId = storedRecentConnectorId;
+                try {
+                    parsedId = JSON.parse(storedRecentConnectorId);
+                } catch {
+                    // If JSON.parse fails, use the raw string
+                }
+                setRecentConnectorId(parsedId);
+            }
+        } catch (error) {
+            console.error('Failed to get recent connector id from localStorage:', error);
+        }
     }, []);
 
     useEffect(() => {
@@ -231,7 +255,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
                     setReady(true);
                 } catch (error) {
                     console.error('Failed to fetch app configuration:', error);
-                    setReady(true); // Set ready to true even if config fetch fails
+                    setReady(false); // Set ready to true even if config fetch fails
                 }
             };
 
@@ -605,11 +629,18 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
             });
             handleTokens(res.data.data.access_token, res.data.data.refresh_token, true);
 
-            // Hide loading popup and clear states
+            // Show success message before closing
             setOauthLoading(null);
-            setShowPopup({ show: false });
-            setStep('email');
-            setCode(['', '', '', '', '', '']);
+            setOauthSuccess({ provider });
+            setShowPopup({ show: true, view: 'oauth-success' });
+
+            // Wait 1 second then close
+            setTimeout(() => {
+                setOauthSuccess(null);
+                setShowPopup({ show: false });
+                setStep('email');
+                setCode(['', '', '', '', '', '']);
+            }, 1000);
         } catch (e: any) {
             // Show error popup
             setOauthLoading(null);
@@ -1085,7 +1116,7 @@ Issued At: ${components.issuedAt}`;
                             }
                         } catch (e: any) {
                             console.error('Wallet operation error:', e);
-                            setError(e.message);
+                            setWalletError(e.message);
                             setShowPopup({ show: true, view: 'wallet-error' });
                         }
                     },
@@ -1334,6 +1365,11 @@ Issued At: ${components.issuedAt}`;
 
     const handleMfaCodeInput = (index: number, value: string) => {
         if (/^[0-9]?$/.test(value)) {
+
+            if (error) {
+                setError(null);
+            }
+
             const newCode = [...mfaCode];
             newCode[index] = value;
             setMfaCode(newCode);
@@ -1392,6 +1428,45 @@ Issued At: ${components.issuedAt}`;
         }
     };
 
+    const downloadBackup = async () => {
+        if (mfaSecret) {
+            const user = parseUser();
+            const appName = appConfig?.name || 'pr0d.io';
+            const userEmail = user?.email?.email || 'user';
+            const totpUrl = getTotpUrl();
+            
+            // Create backup data
+            const backupData = {
+                service: appName,
+                account: userEmail,
+                secret: mfaSecret,
+                qr_url: totpUrl,
+                created_at: new Date().toISOString(),
+                backup_type: 'mfa_authenticator'
+            };
+
+            // Create downloadable file
+            const content = JSON.stringify(backupData, null, 2);
+            const blob = new Blob([content], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            // Create download link
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${appName.replace(/[^a-zA-Z0-9]/g, '_')}_mfa_backup_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Clean up
+            URL.revokeObjectURL(url);
+            
+            // Show success feedback
+            setBackupDownloaded(true);
+            setTimeout(() => setBackupDownloaded(false), 2000);
+        }
+    };
+
     const copyWalletConnectUri = async () => {
         if (walletConnectUri) {
             try {
@@ -1422,12 +1497,14 @@ Issued At: ${components.issuedAt}`;
             setMfaSecret(null);
             setCopied(false);
             setUriCopied(false);
+            setBackupDownloaded(false);
             setError(null);
             setStep('email');
             setEmail('');
             setCode(['', '', '', '', '', '']);
             setOauthError(null);
             setOauthLoading(null);
+            setOauthSuccess(null);
             setWalletConnectUri(null);
             walletConnectUriReceived.current = false;
             setWalletError(null);
@@ -1744,14 +1821,14 @@ Issued At: ${components.issuedAt}`;
                     });
 
                     if (credential) {
-                        const result = await verifyPasskey(credential);
+                        const result = await verifyPasskey(credential, false);
                         if (result.type === 'registration') {
                             setMfaStep('passkey-success');
                             setIsPasskeySetupMode(false);
-                            // Close popup after delay
+                            // Close popup after 1 second
                             setTimeout(() => {
                                 closePopup();
-                            }, 2000);
+                            }, 1000);
                         }
                     }
                 } catch (err: any) {
@@ -1804,7 +1881,7 @@ Issued At: ${components.issuedAt}`;
             if (credential) {
                 // Show signing state while server verifies
                 setShowPopup({ show: true, view: 'passkey-signing' });
-                await verifyPasskey(credential);
+                await verifyPasskey(credential, true);
                 // verifyPasskey will close the popup if authentication succeeds
             }
         } catch (err: any) {
@@ -1838,7 +1915,7 @@ Issued At: ${components.issuedAt}`;
         }
     };
 
-    const verifyPasskey = async (credential: any): Promise<{ type: 'registration' | 'authentication'; user?: User; accessToken?: string; refreshToken?: string; message: string }> => {
+    const verifyPasskey = async (credential: any, showSuccessMessage: boolean = false): Promise<{ type: 'registration' | 'authentication'; user?: User; accessToken?: string; refreshToken?: string; message: string }> => {
         try {
             const response = await axios.post(`${baseUrl}/api/passkeys/verify`, {
                 credential
@@ -1853,12 +1930,22 @@ Issued At: ${components.issuedAt}`;
             // If this was an authentication (login), handle tokens
             if (responseData.type === 'authentication' && responseData.access_token) {
                 handleTokens(responseData.access_token, responseData.refresh_token, true);
-                closePopup();
+                
+                // Only show success message if explicitly requested (for popup-based login)
+                if (showSuccessMessage) {
+                    setShowPopup({ show: true, view: 'passkey-login-success' });
+
+                    // Wait 1 second then close
+                    setTimeout(() => {
+                        closePopup();
+                    }, 1000);
+                }
             }
 
             if (responseData.type === 'registration') {
                 getUser();
-                closePopup();
+                // Don't close immediately - let the success view show for 1 second
+                // The handlePasskeySetup function will handle closing after showing success
             }
 
             return {
@@ -2041,8 +2128,8 @@ Issued At: ${components.issuedAt}`;
             if (!credential) {
                 throw new Error('No credential returned from passkey authentication');
             }
-            // Verify with backend
-            return await verifyPasskey(credential);
+            // Verify with backend (don't show success message for direct login)
+            return await verifyPasskey(credential, false);
         } catch (err: any) {
             throw new Error(err.message || 'Failed to login with passkey');
         }
@@ -2115,6 +2202,30 @@ Issued At: ${components.issuedAt}`;
     return (
         <AuthContext.Provider value={contextValue}>
             <div>
+                <style>
+                    {`
+                        .pr0d-email-input::placeholder {
+                            color: ${isLightColor(appConfig?.background || '#ffffff') ? '#9ca3af' : '#6b7280'} !important;
+                            opacity: 0.6 !important;
+                            font-weight: 400 !important;
+                        }
+                        .pr0d-email-input::-webkit-input-placeholder {
+                            color: ${isLightColor(appConfig?.background || '#ffffff') ? '#9ca3af' : '#6b7280'} !important;
+                            opacity: 0.6 !important;
+                            font-weight: 400 !important;
+                        }
+                        .pr0d-email-input::-moz-placeholder {
+                            color: ${isLightColor(appConfig?.background || '#ffffff') ? '#9ca3af' : '#6b7280'} !important;
+                            opacity: 0.6 !important;
+                            font-weight: 400 !important;
+                        }
+                        .pr0d-email-input:-ms-input-placeholder {
+                            color: ${isLightColor(appConfig?.background || '#ffffff') ? '#9ca3af' : '#6b7280'} !important;
+                            opacity: 0.6 !important;
+                            font-weight: 400 !important;
+                        }
+                    `}
+                </style>
                 {showPopup.show && (
                     <div
                         style={styles.overlay}
@@ -2138,7 +2249,7 @@ Issued At: ${components.issuedAt}`;
                             >
                                 <CloseIcon style={{ width: 16, height: 16 }} />
                             </button>
-                            {((showPopup.view === 'loginorsignup' && step === 'code') ||
+                            {!appConfig ? null : ((showPopup.view === 'loginorsignup' && step === 'code') ||
                                 (showPopup.view === 'link' && step === 'code') ||
                                 (showPopup.view === 'wallet') ||
                                 (showPopup.view === 'wallet-connecting') ||
@@ -2221,42 +2332,63 @@ Issued At: ${components.issuedAt}`;
                                     </button>
                                 )}
 
-                            {showPopup.view == 'loginorsignup' && step === 'email' ? <p style={styles.titleSmall}>Log in or sign up</p> : null}
-                            {showPopup.view == 'loginorsignup' && step === 'code' ? <h3 style={styles.title}>Enter confirmation code</h3> : null}
-                            {showPopup.view == 'wallet' ? <h3 style={styles.titleSmall}>{isWalletLinking ? 'Link Wallet' : 'Log in or sign up'}</h3> : null}
-                            {showPopup.view == 'link' && step === 'email' ? <h3 style={styles.title}>Link your Email</h3> : null}
-                            {showPopup.view == 'link' && step === 'code' ? <h3 style={styles.title}>Enter confirmation code</h3> : null}
-                            {showPopup.view == 'provider' ? <h3 style={styles.title}>Link Social Account</h3> : null}
-                            {showPopup.view == 'oauth-error' ? null : null}
-                            {showPopup.view === 'mfa' && mfaStep === 'method' && (
+                            {!appConfig ? (
                                 <>
                                     <div style={styles.shieldIcon}>
-                                        <svg viewBox="0 0 24 24" fill={appConfig?.accent || "#666"} style={{ width: 48, height: 48 }}>
-                                            <path d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M10,17L6,13L7.41,11.59L10,14.17L16.59,7.58L18,9L10,17Z" />
+                                        <svg viewBox="0 0 24 24" fill="#dc3545" style={{ width: 48, height: 48 }}>
+                                            <path d="M12,2C13.1,2 14,2.9 14,4C14,5.1 13.1,6 12,6C10.9,6 10,5.1 10,4C10,2.9 10.9,2 12,2M21,9V7L12,2L3,7V9C3,14.55 6.84,19.74 12,21C17.16,19.74 21,14.55 21,9M12,7C13.1,7 14,7.9 14,9C14,10.1 13.1,11 12,11C10.9,11 10,10.1 10,9C10,7.9 10.9,7 12,7M12,17.23C10.25,16.5 9,14.42 9,12.1V11.81C9.91,12.65 11.33,13.5 12,13.5C12.67,13.5 14.09,12.65 15,11.81V12.1C15,14.42 13.75,16.5 12,17.23Z" />
                                         </svg>
                                     </div>
-                                    <h3 style={styles.title}>Choose a verification method</h3>
-                                    <p style={styles.subtitle}>How would you like to verify your identity? You can change this later.</p>
+                                    <h3 style={{
+                                        ...styles.title,
+                                        color: '#dc3545'
+                                    }}>App loading error</h3>
+                                    <p style={{
+                                        ...styles.walletConnectingMessage,
+                                        color: '#6c757d'
+                                    }}>Please check your configuration</p>
+                                </>
+                            ) : (
+                                <>
+                                    {showPopup.view == 'loginorsignup' && step === 'email' ? <p style={styles.titleSmall}>Log in or sign up</p> : null}
+                                    {showPopup.view == 'loginorsignup' && step === 'code' ? <h3 style={styles.title}>Enter confirmation code</h3> : null}
+                                    {showPopup.view == 'wallet' ? <h3 style={styles.titleSmall}>{isWalletLinking ? 'Link Wallet' : 'Log in or sign up'}</h3> : null}
+                                    {showPopup.view == 'link' && step === 'email' ? <h3 style={styles.title}>Link your Email</h3> : null}
+                                    {showPopup.view == 'link' && step === 'code' ? <h3 style={styles.title}>Enter confirmation code</h3> : null}
+                                    {showPopup.view == 'provider' ? <h3 style={styles.title}>Link Social Account</h3> : null}
+                                    {showPopup.view == 'oauth-error' ? null : null}
+                                    {showPopup.view === 'mfa' && mfaStep === 'method' && (
+                                        <>
+                                            <div style={styles.shieldIcon}>
+                                                <SecurityIcon style={{ width: 48, height: 48, color: appConfig?.accent || "#666" }} />
+                                            </div>
+                                            <h3 style={styles.title}>Choose a verification method</h3>
+                                            <p style={styles.walletConnectingMessage}>How would you like to verify your identity? You can change this later.</p>
+                                            <br/>
+                                        </>
+                                    )}
                                 </>
                             )}
-                            {showPopup.view === 'loginorsignup' && (
-                                <div style={styles.logo}>
+                            {appConfig && showPopup.view === 'loginorsignup' && (
+                                <>
                                     {step === 'code' ? (
+                                        <div>
                                         <div style={styles.emailIconContainer}>
                                             <svg style={styles.emailIconLarge} viewBox="0 0 24 24" fill="none" stroke={appConfig?.accent || "#666"} strokeWidth="1.5">
                                                 <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
                                                 <polyline points="22,6 12,13 2,6" />
                                             </svg>
                                         </div>
+                                        </div>
                                     ) : appConfig?.image ? (
+                                        <div style={styles.logo}>
                                         <img src={appConfig.image} alt={appConfig.name} style={styles.logoImage} />
+                                        </div>
                                     ) : null}
-                                </div>
+                                </>
                             )}
 
-                            {error && <div style={styles.error}>{error}</div>}
-
-                            {showPopup.view === 'mfa' && mfaStep === 'method' ? (
+                            {appConfig && showPopup.view === 'mfa' && mfaStep === 'method' ? (
                                 <div style={styles.methodContainer}>
                                     <FocusableButton
                                         id="mfa-authenticator"
@@ -2339,30 +2471,49 @@ Issued At: ${components.issuedAt}`;
 
 
                                 </div>
-                            ) : showPopup.view === 'mfa' && mfaStep === 'qr' && qrCodeUrl ? (
+                            ) : appConfig && showPopup.view === 'mfa' && mfaStep === 'qr' && qrCodeUrl ? (
                                 <div style={styles.mfaContainer}>
                                     <h3 style={styles.mfaTitle}>Scan QR code</h3>
                                     <p style={styles.mfaInstruction}>Open your authenticator app and scan the QR code to continue.</p>
                                     <div style={styles.qrCodeContainer}>
                                         <div ref={qrCodeRef} style={styles.qrCodeWrapper}></div>
                                     </div>
-                                    <button style={styles.copyButton} onClick={copySetupKey}>
-                                        {copied ? (
-                                            <>
-                                                <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#666">
-                                                    <path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
-                                                </svg>
-                                                Copied setup key
-                                            </>
-                                        ) : (
-                                            <>
-                                                <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#666">
-                                                    <path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" />
-                                                </svg>
-                                                Copy setup key
-                                            </>
-                                        )}
-                                    </button>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%' }}>
+                                        <button style={styles.copyButton} onClick={copySetupKey}>
+                                            {copied ? (
+                                                <>
+                                                    <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#666">
+                                                        <path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
+                                                    </svg>
+                                                    Copied setup key
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#666">
+                                                        <path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" />
+                                                    </svg>
+                                                    Copy setup key
+                                                </>
+                                            )}
+                                        </button>
+                                        <button style={styles.copyButton} onClick={downloadBackup}>
+                                            {backupDownloaded ? (
+                                                <>
+                                                    <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#666">
+                                                        <path d="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" />
+                                                    </svg>
+                                                    Backup downloaded
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg style={styles.copyIcon} viewBox="0 0 24 24" fill="#666">
+                                                        <path d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z" />
+                                                    </svg>
+                                                    Backup
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
                                     <FocusableButton
                                         id="mfa-continue"
                                         style={{
@@ -2380,9 +2531,12 @@ Issued At: ${components.issuedAt}`;
                                         defaultBackgroundColor={appConfig?.accent || '#007bff'}
                                     >Continue</FocusableButton>
                                 </div>
-                            ) : showPopup.view === 'mfa' && mfaStep === 'code' ? (
+                            ) : appConfig && showPopup.view === 'mfa' && mfaStep === 'code' ? (
                                 <div style={styles.mfaContainer}>
                                     <h3 style={styles.mfaTitle}>Enter enrollment code</h3>
+                                    <div style={styles.emailIconContainer}>
+                                        <QrCodeScannerIcon style={{ ...styles.emailIconLarge, color: appConfig?.accent || "#666" }} />
+                                    </div>
                                     <p style={styles.mfaInstruction}>To continue, enter the 6-digit code generated from your authenticator app.</p>
                                     <div style={styles.codeContainer}>
                                         {mfaCode.map((digit, index) => (
@@ -2408,6 +2562,7 @@ Issued At: ${components.issuedAt}`;
                                             />
                                         ))}
                                     </div>
+                                    {error && <div style={styles.error}>{error}</div>}
                                     <button
                                         style={{
                                             ...styles.backButton,
@@ -2422,84 +2577,34 @@ Issued At: ${components.issuedAt}`;
                                         Back to QR Code
                                     </button>
                                 </div>
-                            ) : showPopup.view === 'mfa' && mfaStep === 'passkey' ? (
-                                <div style={styles.passkeySigningContainer}>
-                                    <div style={styles.passkeySigningIcon}>
-                                        <div style={{
-                                            position: 'relative',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
-                                        }}>
-                                            {/* Apple-style pulsing circles */}
-                                            <div style={{
-                                                position: 'absolute',
-                                                width: 80,
-                                                height: 80,
-                                                borderRadius: '50%',
-                                                border: `2px solid ${appConfig?.accent || '#007bff'}`,
-                                                opacity: 0.3,
-                                                animation: 'pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite'
-                                            }} />
-                                            <div style={{
-                                                position: 'absolute',
-                                                width: 60,
-                                                height: 60,
-                                                borderRadius: '50%',
-                                                border: `2px solid ${appConfig?.accent || '#007bff'}`,
-                                                opacity: 0.5,
-                                                animation: 'pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) 0.5s infinite'
-                                            }} />
-                                            {/* Material UI Fingerprint Icon */}
-                                            <FingerprintIcon
-                                                style={{
-                                                    fontSize: 48,
-                                                    color: appConfig?.accent || '#007bff',
-                                                    animation: 'fingerprint-pulse 1.5s ease-in-out infinite alternate'
-                                                }}
-                                            />
-                                        </div>
-                                    </div>
-                                    <h3 style={styles.passkeySigningTitle}>
+                            ) : appConfig && showPopup.view === 'mfa' && mfaStep === 'passkey' ? (
+                                <div style={styles.walletConnectingContainer}>
+                                    <PasskeyStatusCircle
+                                        status="loading"
+                                        hasLoadingAnimation={true}
+                                        appConfig={appConfig}
+                                    />
+                                    <h3 style={styles.walletConnectingTitle}>
                                         Creating Passkey
                                     </h3>
-                                    <p style={styles.passkeySigningMessage}>
+                                    <p style={styles.walletConnectingMessage}>
                                         Follow your browser's instructions to create a passkey
                                     </p>
                                 </div>
-                            ) : showPopup.view === 'mfa' && mfaStep === 'passkey-success' ? (
-                                <div style={styles.passkeySigningContainer}>
-                                    <div style={styles.passkeySigningIcon}>
-                                        <div style={{
-                                            position: 'relative',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
-                                        }}>
-                                            {/* Success checkmark with accent color */}
-                                            <div style={{
-                                                width: 60,
-                                                height: 60,
-                                                borderRadius: '50%',
-                                                backgroundColor: appConfig?.accent || '#007bff',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center'
-                                            }}>
-                                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-                                                    <path d="M9 12l2 2 4-4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                                </svg>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <h3 style={styles.passkeySigningTitle}>
+                            ) : appConfig && showPopup.view === 'mfa' && mfaStep === 'passkey-success' ? (
+                                <div style={styles.walletConnectingContainer}>
+                                    <PasskeyStatusCircle
+                                        status="success"
+                                        appConfig={appConfig}
+                                    />
+                                    <h3 style={styles.walletConnectingTitle}>
                                         Passkey Created Successfully
                                     </h3>
-                                    <p style={styles.passkeySigningMessage}>
+                                    <p style={styles.walletConnectingMessage}>
                                         Your passkey has been linked to your account for secure authentication
                                     </p>
                                 </div>
-                            ) : showPopup.view === 'link' ? (
+                            ) : appConfig && showPopup.view === 'link' ? (
                                 <>
                                     {step === 'code' && (
                                         <div style={styles.emailIconContainer}>
@@ -2518,6 +2623,7 @@ Issued At: ${components.issuedAt}`;
                                                     <polyline points="22,6 12,13 2,6" />
                                                 </svg>
                                                 <input
+                                                    className="pr0d-email-input"
                                                     style={{
                                                         ...styles.inputField,
                                                         borderColor: focusedInput === 'link-email' ? (appConfig?.accent || (isLightColor(appConfig?.background || '#ffffff') ? '#e5e7eb' : '#636363')) : (isLightColor(appConfig?.background || '#ffffff') ? '#e5e7eb' : '#636363')
@@ -2574,6 +2680,7 @@ Issued At: ${components.issuedAt}`;
                                                     />
                                                 ))}
                                             </div>
+                                            {error && <div style={styles.error}>{error}</div>}
 
                                             <button
                                                 style={{
@@ -2591,7 +2698,7 @@ Issued At: ${components.issuedAt}`;
                                         </>
                                     )}
                                 </>
-                            ) : showPopup.view === 'loginorsignup' ? (
+                            ) : appConfig && showPopup.view === 'loginorsignup' ? (
                                 <>
                                     {step === 'email' ? (
                                         <>
@@ -2601,6 +2708,7 @@ Issued At: ${components.issuedAt}`;
                                                     <polyline points="22,6 12,13 2,6" />
                                                 </svg>
                                                 <input
+                                                    className="pr0d-email-input"
                                                     style={{
                                                         ...styles.inputField,
                                                         borderColor: focusedInput === 'login-email' ? (appConfig?.accent || (isLightColor(appConfig?.background || '#ffffff') ? '#e5e7eb' : '#636363')) : (isLightColor(appConfig?.background || '#ffffff') ? '#e5e7eb' : '#636363')
@@ -2631,6 +2739,8 @@ Issued At: ${components.issuedAt}`;
                                                     Submit
                                                 </button>
                                             </div>
+
+
 
                                             {appConfig?.google && (
                                                 <FocusableButton
@@ -2833,6 +2943,7 @@ Issued At: ${components.issuedAt}`;
                                                     />
                                                 ))}
                                             </div>
+                                            {error && <div style={styles.error}>{error}</div>}
                                             <button
                                                 style={{
                                                     ...styles.backButton,
@@ -2849,36 +2960,15 @@ Issued At: ${components.issuedAt}`;
                                         </>
                                     )}
                                 </>
-                            ) : showPopup.view === 'oauth-error' && oauthError ? (
+                            ) : appConfig && showPopup.view === 'oauth-error' && oauthError ? (
                                 <div style={styles.oauthErrorContainer}>
-                                    <div style={styles.oauthErrorIcon}>
-                                        {oauthError.provider === 'google' && (
-                                            <svg style={styles.providerIconLarge} viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                                                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                                                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                                                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                                            </svg>
-                                        )}
-                                        {oauthError.provider === 'discord' && (
-                                            <svg style={styles.providerIconLarge} viewBox="0 0 24 24" fill="#5865F2">
-                                                <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a .077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a .076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a .077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a .0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a .0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a .077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a .076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a .077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a .061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419-.019 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1568 2.4189Z" />
-                                            </svg>
-                                        )}
-                                        {oauthError.provider === 'x' && (
-                                            <svg style={styles.providerIconLarge} viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                                            </svg>
-                                        )}
-                                        {oauthError.provider === 'github' && (
-                                            <svg style={styles.providerIconLarge} viewBox="0 0 24 24" fill="currentColor">
-                                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-                                            </svg>
-                                        )}
-
-                                    </div>
-                                    <h3 style={styles.oauthErrorTitle}>Authentication failed</h3>
-                                    <p style={styles.oauthErrorMessage}>{oauthError.errorMessage ? oauthError.errorMessage : "Something went wrong. Try again."}</p>
+                                    <ProviderStatusCircle
+                                        status="error"
+                                        provider={oauthError.provider as 'google' | 'discord' | 'x' | 'github'}
+                                        appConfig={appConfig}
+                                    />
+                                    <h3 style={styles.walletErrorTitle}>Authentication failed</h3>
+                                    <p style={styles.walletErrorSubtitle}>{oauthError.errorMessage ? oauthError.errorMessage : "Something went wrong. Try again."}</p>
                                     <button
                                         style={{
                                             ...styles.retryButton,
@@ -2909,13 +2999,23 @@ Issued At: ${components.issuedAt}`;
                                         Retry
                                     </button>
                                 </div>
-                            ) : showPopup.view === 'wallet' ? (
+                            ) : appConfig && showPopup.view === 'wallet' ? (
                                 <div style={styles.walletContainer}>
                                     {error && <div style={styles.error}>{error}</div>}
 
                                     <div style={styles.walletListContainer}>
                                         {connectors && connectors.length > 0 ? (
-                                            connectors.map((connector) => {
+                                            // Sort connectors to put the recent one first
+                                            [...connectors].sort((a, b) => {
+                                                const aIsRecent = recentConnectorId === a.id || 
+                                                    (originalConnectors.find(oc => oc.name === a.name)?.id === recentConnectorId);
+                                                const bIsRecent = recentConnectorId === b.id || 
+                                                    (originalConnectors.find(oc => oc.name === b.name)?.id === recentConnectorId);
+                                                
+                                                if (aIsRecent && !bIsRecent) return -1; // a comes first
+                                                if (!aIsRecent && bIsRecent) return 1;  // b comes first
+                                                return 0; // maintain original order
+                                            }).map((connector) => {
                                                 const isReady = connector.ready;
                                                 const isWalletConnect = connector.id === 'walletConnect' ||
                                                     connector.id === 'binance-wallet' ||
@@ -2964,17 +3064,36 @@ Issued At: ${components.issuedAt}`;
                                                         ) : (
                                                             <>
                                                                 {connector.name}
-                                                                {isWalletConnect && (
-                                                                    <span style={{
-                                                                        fontSize: 11,
-                                                                        fontWeight: 600,
-                                                                        color: appConfig?.accent || '#3B99FC',
-                                                                        backgroundColor: `${appConfig?.accent || '#3B99FC'}25`, // 25 hex = ~15% opacity
-                                                                        padding: '2px 6px',
-                                                                        borderRadius: 4,
-                                                                        marginLeft: 'auto'
-                                                                    }}>QR</span>
-                                                                )}
+                                                                <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
+                                                                    {(() => {
+                                                                        // Find the original connector to get its ID
+                                                                        const originalConnector = originalConnectors.find(oc => oc.name === connector.name);
+                                                                        const matchesCustomId = recentConnectorId === connector.id;
+                                                                        const matchesOriginalId = originalConnector && recentConnectorId === originalConnector.id;
+                                                                        const isRecent = matchesCustomId || matchesOriginalId;
+                                                                        
+                                                                        return isRecent;
+                                                                    })() && (
+                                                                        <span style={{
+                                                                            fontSize: 11,
+                                                                            fontWeight: 600,
+                                                                            color: appConfig?.accent || '#3B99FC',
+                                                                            backgroundColor: getLightAccentColor(appConfig?.accent || '#20c997'),
+                                                                            padding: '2px 6px',
+                                                                            borderRadius: 4,
+                                                                        }}>Recent</span>
+                                                                    )}
+                                                                    {isWalletConnect && (
+                                                                        <span style={{
+                                                                            fontSize: 11,
+                                                                            fontWeight: 600,
+                                                                            color: appConfig?.accent || '#3B99FC',
+                                                                            backgroundColor: `${appConfig?.accent || '#3B99FC'}25`, // 25 hex = ~15% opacity
+                                                                            padding: '2px 6px',
+                                                                            borderRadius: 4,
+                                                                        }}>QR</span>
+                                                                    )}
+                                                                </div>
                                                             </>
                                                         )}
                                                     </FocusableButton>
@@ -3002,11 +3121,11 @@ Issued At: ${components.issuedAt}`;
                                         </div>
                                     </div>
                                 </div>
-                            ) : showPopup.view === 'wallet-connecting' && connectingWallet ? (
+                            ) : appConfig && showPopup.view === 'wallet-connecting' && connectingWallet ? (
                                 <div style={styles.walletConnectingContainer}>
                                     {walletConnectUri ? (
                                         <div style={styles.walletConnectQrContainer}>
-                                            <div style={styles.walletConnectQrCode}>
+                                            <div style={styles.qrCodeContainer}>
                                                 <div ref={qrCodeRef} style={styles.qrCodeWrapper}></div>
                                             </div>
                                             <button
@@ -3053,6 +3172,7 @@ Issued At: ${components.issuedAt}`;
                                         // Show loading spinner for other wallets or while generating QR code
                                         <div style={styles.walletConnectingContainer}>
                                             <WalletStatusCircle
+                                                appConfig={appConfig}
                                                 status="loading"
                                                 walletName={connectingWallet.name}
                                                 connectors={connectors}
@@ -3062,7 +3182,7 @@ Issued At: ${components.issuedAt}`;
                                             <h3 style={styles.walletConnectingTitle}>
                                                 {(connectingWallet.name?.toLowerCase().includes('walletconnect') ||
                                                     connectingWallet.name?.toLowerCase().includes('trust')) ?
-                                                    'Generating QR Code...' :
+                                                    'Generating QR Code' :
                                                     `Waiting for ${connectingWallet.name}`
                                                 }
                                             </h3>
@@ -3077,9 +3197,10 @@ Issued At: ${components.issuedAt}`;
                                     )}
                                 </div>
 
-                            ) : showPopup.view === 'wallet-signing' && connectingWallet ? (
+                            ) : appConfig && showPopup.view === 'wallet-signing' && connectingWallet ? (
                                 <div style={styles.walletSigningContainer}>
                                     <WalletStatusCircle
+                                        appConfig={appConfig}
                                         status="signing"
                                         walletName={connectingWallet.name}
                                         connectors={connectors}
@@ -3094,9 +3215,10 @@ Issued At: ${components.issuedAt}`;
                                     </p>
 
                                 </div>
-                            ) : showPopup.view === 'wallet-success' && connectingWallet ? (
+                            ) : appConfig && showPopup.view === 'wallet-success' && connectingWallet ? (
                                 <div style={styles.walletConnectingContainer}>
                                     <WalletStatusCircle
+                                        appConfig={appConfig}
                                         status="loading"
                                         walletName={connectingWallet.name}
                                         connectors={connectors}
@@ -3106,32 +3228,37 @@ Issued At: ${components.issuedAt}`;
                                     <h3 style={styles.walletConnectingTitle}>
                                         Connected to {connectingWallet.name}
                                     </h3>
-                                    <p style={styles.walletGeneratingChallenge}>
+                                    <p style={styles.walletSigningMessage}>
                                         {address && `Address: ${address.slice(0, 6)}...${address.slice(-4)}`}
                                     </p>
                                 </div>
-                            ) : showPopup.view === 'wallet-login-success' && connectingWallet ? (
+                            ) : appConfig && showPopup.view === 'wallet-login-success' && connectingWallet ? (
                                 <div style={styles.walletConnectingContainer}>
                                     <WalletStatusCircle
+                                        appConfig={appConfig}
                                         status="success"
                                         walletName={connectingWallet.name}
                                         connectors={connectors}
                                         connectingWallet={connectingWallet}
                                     />
                                     <h3 style={styles.walletConnectingTitle}>
-                                        Successfully connected {walletConnectUri ? 'with' : 'to'} {connectingWallet.name}
+                                        Successfully verified
                                     </h3>
+                                    <p style={styles.walletSigningMessage}>
+                                        You are ready to go
+                                    </p>
                                 </div>
-                            ) : showPopup.view === 'wallet-error' ? (
+                            ) : appConfig && showPopup.view === 'wallet-error' ? (
                                 <div style={styles.walletErrorContainer}>
                                     <WalletStatusCircle
+                                        appConfig={appConfig}
                                         status="error"
                                         walletName={connectingWallet?.name || 'Wallet'}
                                         connectors={connectors}
                                         connectingWallet={connectingWallet}
                                     />
-                                    <h3 style={styles.walletErrorTitle}>Could not log in with wallet</h3>
-                                    <p style={styles.walletErrorSubtitle}>Please try connecting again.</p>
+                                    <h3 style={styles.walletErrorTitle}>Could not {isWalletLinking ? 'link' : 'log in with'} wallet</h3>
+                                    <p style={styles.walletErrorSubtitle}>{walletError}</p>
                                     <FocusableButton
                                         id="wallet-retry"
                                         style={{
@@ -3158,96 +3285,80 @@ Issued At: ${components.issuedAt}`;
                                         Try Again
                                     </FocusableButton>
                                 </div>
-                            ) : showPopup.view === 'oauth-loading' && oauthLoading ? (
+                            ) : appConfig && showPopup.view === 'oauth-loading' && oauthLoading ? (
                                 <div style={styles.oauthLoadingContainer}>
                                     <ProviderStatusCircle
                                         status="loading"
                                         provider={oauthLoading.provider as 'google' | 'discord' | 'x' | 'github'}
                                         hasLoadingAnimation={true}
+                                        appConfig={appConfig}
                                     />
                                     <h3 style={styles.oauthLoadingTitle}>
                                         Verifying connection to {oauthLoading.provider === 'x' ? 'Twitter' : oauthLoading.provider === 'github' ? 'GitHub' : oauthLoading.provider.charAt(0).toUpperCase() + oauthLoading.provider.slice(1)}
                                     </h3>
                                     <p style={styles.oauthLoadingMessage}>Just a few moments more</p>
                                 </div>
-                            ) : showPopup.view === 'passkey-loading' ? (
+                            ) : appConfig && showPopup.view === 'oauth-success' && oauthSuccess ? (
+                                <div style={styles.oauthLoadingContainer}>
+                                    <ProviderStatusCircle
+                                        status="success"
+                                        provider={oauthSuccess.provider as 'google' | 'discord' | 'x' | 'github'}
+                                        appConfig={appConfig}
+                                    />
+                                    <h3 style={styles.oauthLoadingTitle}>
+                                        Successfully verified
+                                    </h3>
+                                    <p style={styles.oauthLoadingMessage}>
+                                        You are ready to go
+                                    </p>
+                                </div>
+                            ) : appConfig && showPopup.view === 'passkey-loading' ? (
                                 <div style={styles.passkeyLoadingContainer}>
-                                    <div style={styles.passkeyLoadingIcon}>
-                                        <div style={styles.passkeyDualIcons}>
-                                            {/* FontAwesome Fingerprint Icon */}
-                                            <FingerprintIcon
-                                                style={{
-                                                    ...styles.passkeyBiometricIcon,
-                                                    color: appConfig?.accent || '#007bff',
-                                                    fontSize: 48
-                                                }}
-                                            />
-
-                                        </div>
-                                    </div>
+                                    <PasskeyStatusCircle
+                                        status="loading"
+                                        hasLoadingAnimation={true}
+                                        appConfig={appConfig}
+                                    />
                                     <h3 style={styles.passkeyLoadingTitle}>
-                                        Authenticating with Passkey
+                                        Waiting for Passkey
                                     </h3>
                                     <p style={styles.passkeyLoadingMessage}>
                                         Please use your face, fingerprint, or device PIN to authenticate
                                     </p>
                                 </div>
-                            ) : showPopup.view === 'passkey-signing' ? (
+                            ) : appConfig && showPopup.view === 'passkey-signing' ? (
                                 <div style={styles.passkeySigningContainer}>
-                                    <div style={styles.passkeySigningIcon}>
-                                        <div style={{
-                                            position: 'relative',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
-                                        }}>
-                                            {/* Apple-style pulsing circles */}
-                                            <div style={{
-                                                position: 'absolute',
-                                                width: 80,
-                                                height: 80,
-                                                borderRadius: '50%',
-                                                border: `2px solid ${appConfig?.accent || '#007bff'}`,
-                                                opacity: 0.3,
-                                                animation: 'pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite'
-                                            }} />
-                                            <div style={{
-                                                position: 'absolute',
-                                                width: 60,
-                                                height: 60,
-                                                borderRadius: '50%',
-                                                border: `2px solid ${appConfig?.accent || '#007bff'}`,
-                                                opacity: 0.5,
-                                                animation: 'pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) 0.5s infinite'
-                                            }} />
-                                            {/* Material UI Fingerprint Icon */}
-                                            <FingerprintIcon
-                                                style={{
-                                                    fontSize: 48,
-                                                    color: appConfig?.accent || '#007bff',
-                                                    animation: 'fingerprint-pulse 1.5s ease-in-out infinite alternate'
-                                                }}
-                                            />
-                                        </div>
-                                    </div>
+                                    <PasskeyStatusCircle
+                                        status="signing"
+                                        hasLoadingAnimation={true}
+                                        appConfig={appConfig}
+                                    />
                                     <h3 style={styles.passkeySigningTitle}>
                                         Verifying Passkey
                                     </h3>
                                     <p style={styles.passkeySigningMessage}>
-                                        Confirming your identity with the server...
+                                        Confirming your identity with the server
                                     </p>
                                 </div>
-                            ) : showPopup.view === 'passkey-error' && passkeyError ? (
+                            ) : appConfig && showPopup.view === 'passkey-login-success' ? (
+                                <div style={styles.walletConnectingContainer}>
+                                    <PasskeyStatusCircle
+                                        status="success"
+                                        appConfig={appConfig}
+                                    />
+                                    <h3 style={styles.passkeySigningTitle}>
+                                        Successfully verified
+                                    </h3>
+                                    <p style={styles.passkeySigningMessage}>
+                                        You are ready to go
+                                    </p>
+                                </div>
+                            ) : appConfig && showPopup.view === 'passkey-error' && passkeyError ? (
                                 <div style={styles.passkeyErrorContainer}>
-                                    <div style={styles.passkeyErrorIcon}>
-                                        <FingerprintIcon
-                                            style={{
-                                                fontSize: 48,
-                                                color: '#dc3545',
-                                                animation: 'fingerprint-pulse 1.5s ease-in-out infinite alternate'
-                                            }}
-                                        />
-                                    </div>
+                                    <PasskeyStatusCircle
+                                        status="error"
+                                        appConfig={appConfig}
+                                    />
                                     <h3 style={styles.passkeyErrorTitle}>
                                         Passkey Authentication Failed
                                     </h3>
@@ -3283,7 +3394,7 @@ Issued At: ${components.issuedAt}`;
                                     </div>
                                 </div>
                             ) : null}
-
+                            
                             <div style={{ fontSize: 12, color: '#888', marginTop: 20 }}>
                                 <a href="https://pr0d.io" target="_blank" rel="noopener noreferrer" style={{ color: '#888', textDecoration: 'none' }}>Protected by pr0d.io</a>
                             </div>

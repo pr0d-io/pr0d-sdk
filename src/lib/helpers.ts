@@ -201,7 +201,7 @@ export const getStyles = (appConfig: AppConfig | null): Record<string, React.CSS
             color: secondaryTextColor
         },
         logo: {
-            width: 64, height: 64, borderRadius: 16, margin: '20px auto 24px'
+            width: 64, height: 64, borderRadius: 16, margin: '20px auto 24px', display: 'flex', alignItems: 'center', justifyContent: 'center'
         },
         logoImage: {
             width: '100%',
@@ -454,7 +454,6 @@ export const getStyles = (appConfig: AppConfig | null): Record<string, React.CSS
         methodContainer: {
             display: 'flex',
             flexDirection: 'column',
-            gap: 12,
             width: '100%'
         },
         methodButton: {
@@ -961,8 +960,9 @@ export const getStyles = (appConfig: AppConfig | null): Record<string, React.CSS
             fontSize: 18,
             fontWeight: 500,
             color: textColor,
-            margin: '0 0 20px 0'
+            margin: '0 0 8px 0'
         },
+        
         walletSuccessContainer: {
             display: 'flex',
             flexDirection: 'column',

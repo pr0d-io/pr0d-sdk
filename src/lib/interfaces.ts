@@ -105,6 +105,7 @@ export interface FocusableButtonProps {
 }
 
 export interface WalletCircleProps {
+    appConfig?: AppConfig | null;
     status: 'success' | 'error' | 'loading' | 'signing';
     walletName: string;
     connectors: readonly any[];
@@ -124,4 +125,11 @@ export interface ProviderCircleProps {
     status: 'success' | 'error' | 'loading';
     provider: 'google' | 'discord' | 'x' | 'github';
     hasLoadingAnimation?: boolean;
+    appConfig?: AppConfig | null;
+}
+
+export interface PasskeyCircleProps {
+    status: 'success' | 'error' | 'loading' | 'signing';
+    hasLoadingAnimation?: boolean;
+    appConfig?: AppConfig | null;
 }

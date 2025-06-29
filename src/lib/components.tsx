@@ -1,5 +1,6 @@
 import React from 'react';
-import { FocusableButtonProps, WalletCircleProps, ProviderCircleProps } from './interfaces';
+import { FocusableButtonProps, WalletCircleProps, ProviderCircleProps, PasskeyCircleProps } from './interfaces';
+import FingerprintIcon from '@mui/icons-material/Fingerprint';
 
 // Add CSS animation for spinner
 if (typeof document !== 'undefined') {
@@ -102,6 +103,7 @@ export const FocusableButton = ({
 };
 
 export const WalletStatusCircle = ({
+    appConfig,
     status,
     walletName,
     connectors,
@@ -120,11 +122,11 @@ export const WalletStatusCircle = ({
                 };
             case 'loading':
                 return {
-                    border: '3px solid #20c997'
+                    border: `3px solid ${appConfig?.accent || '#20c997'}`
                 };
             case 'signing':
                 return {
-                    border: '3px solid #e3f2fd'
+                    border: `3px solid ${appConfig?.accent || '#e3f2fd'}`
                 };
             default:
                 return {
@@ -197,7 +199,7 @@ export const WalletStatusCircle = ({
                     width: 64,
                     height: 64,
                     border: '3px solid #e3f2fd',
-                    borderTop: '3px solid #20c997',
+                    borderTop: `3px solid ${appConfig?.accent || '#20c997'}`,
                     borderRadius: '50%',
                     animation: 'spin 1s linear infinite'
                 }}></div>
@@ -209,7 +211,8 @@ export const WalletStatusCircle = ({
 export const ProviderStatusCircle = ({
     status,
     provider,
-    hasLoadingAnimation = false
+    hasLoadingAnimation = false,
+    appConfig
 }: ProviderCircleProps) => {
     const getStatusStyles = () => {
         switch (status) {
@@ -223,7 +226,7 @@ export const ProviderStatusCircle = ({
                 };
             case 'loading':
                 return {
-                    border: '3px solid #20c997',
+                    border: `3px solid ${appConfig?.accent || '#20c997'}`,
                 };
             default:
                 return {
@@ -241,8 +244,8 @@ export const ProviderStatusCircle = ({
     };
 
     const circleStyle = {
-        width: 88,
-        height: 88,
+        width: 64,
+        height: 64,
         borderRadius: '50%',
         display: 'flex',
         alignItems: 'center',
@@ -253,11 +256,8 @@ export const ProviderStatusCircle = ({
 
     const getProviderIcon = () => {
         const iconStyle = {
-            width: 64,
-            height: 64,
-            borderRadius: '50%',
-            padding: 12,
-            backgroundColor: 'transparent'
+            width: 40,
+            height: 40,
         };
 
         switch (provider) {
@@ -291,12 +291,11 @@ export const ProviderStatusCircle = ({
             default:
                 return (
                     <div style={{
-                        fontSize: 32,
+                        fontSize: 24,
                         fontWeight: 600,
                         color: '#4A90E2',
-                        width: 64,
-                        height: 64,
-                        borderRadius: '50%',
+                        width: 40,
+                        height: 40,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center'
@@ -317,10 +316,102 @@ export const ProviderStatusCircle = ({
                     position: 'absolute',
                     top: 0,
                     left: 0,
-                    width: 88,
-                    height: 88,
+                    width: 64,
+                    height: 64,
                     border: '3px solid #e3f2fd',
-                    borderTop: '3px solid #20c997',
+                    borderTop: `3px solid ${appConfig?.accent || '#20c997'}`,
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                }}></div>
+            )}
+        </div>
+    );
+};
+
+export const PasskeyStatusCircle = ({
+    status,
+    hasLoadingAnimation = false,
+    appConfig
+}: PasskeyCircleProps) => {
+    const getStatusStyles = () => {
+        switch (status) {
+            case 'success':
+                return {
+                    border: '3px solid #4CAF50'
+                };
+            case 'error':
+                return {
+                    border: '3px solid #dc3545'
+                };
+            case 'loading':
+                return {
+                    border: `3px solid ${appConfig?.accent || '#20c997'}`
+                };
+            case 'signing':
+                return {
+                    border: `3px solid ${appConfig?.accent || '#e3f2fd'}`
+                };
+            default:
+                return {
+                    border: '3px solid #e9ecef'
+                };
+        }
+    };
+
+    const containerStyle = {
+        position: 'relative' as const,
+        marginBottom: 20,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+    };
+
+    const circleStyle = {
+        width: 64,
+        height: 64,
+        borderRadius: '50%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative' as const,
+        ...getStatusStyles()
+    };
+
+    const getPasskeyIcon = () => {
+        
+        return (
+            <div style={{
+                width: 32,
+                height: 32,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: status === 'error' ? '#dc3545' : undefined,
+            }}>
+                <FingerprintIcon
+                    style={{
+                        fontSize: 40,
+                    }}
+                />
+            </div>
+        );
+    };
+
+    return (
+        <div style={containerStyle}>
+            <div style={circleStyle}>
+                {getPasskeyIcon()}
+            </div>
+            {hasLoadingAnimation && (status === 'signing' || status === 'loading') && (
+                <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: 64,
+                    height: 64,
+                    border: '3px solid #e3f2fd',
+                    borderTop: `3px solid ${appConfig?.accent || '#20c997'}`,
                     borderRadius: '50%',
                     animation: 'spin 1s linear infinite'
                 }}></div>
