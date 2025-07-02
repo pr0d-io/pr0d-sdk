@@ -20,15 +20,15 @@ export interface AppConfig {
     apple: boolean;
     walletConnect: string;
     options: {
-        allowEmail: boolean;
-        allowEmailPlus: boolean;
-        allowX: boolean;
-        allowGoogle: boolean;
-        allowDiscord: boolean;
-        allowGithub: boolean;
-        allowTelegram: boolean;
-        allowExternalWallets: boolean;
-        allowPasskeys: boolean;
+        email: boolean;
+        emailPlus: boolean;
+        x: boolean;
+        google: boolean;
+        discord: boolean;
+        github: boolean;
+        externalWallets: boolean;
+        passkeys: boolean;
+        totp: boolean;
     }
 }
 

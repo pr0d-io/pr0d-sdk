@@ -23,11 +23,19 @@ document.head.appendChild(spinnerStyle);
 
 // The Dashboard component that's only shown to authenticated users
 const Dashboard = () => {
-  const { user, logout, getUser } = usePr0d();
-  2
+  const { user, logout, getUser, refreshSession } = usePr0d();
+  
   const handleGetUser = async () => {
     try {
       await getUser();
+    } catch (error: any) {
+      console.log(error);
+    }
+  };
+
+  const handleRefreshToken = async () => {
+    try {
+      await refreshSession();
     } catch (error: any) {
       console.log(error);
     }
@@ -48,6 +56,16 @@ const Dashboard = () => {
             }}
           >
             Refresh User Data
+          </button>
+          <button
+            onClick={handleRefreshToken}
+            style={{
+              ...styles.logoutButton,
+              backgroundColor: '#2196F3',
+              marginRight: '10px'
+            }}
+          >
+            Refresh Token
           </button>
           <button onClick={logout} style={styles.logoutButton}>Logout</button>
         </div>
@@ -761,6 +779,25 @@ const WalletsSection = () => {
     return new Date(dateString).toLocaleString();
   };
 
+  // Helper to format relative time (e.g., '1 second ago', '2 minutes ago')
+  const formatRelativeTime = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000); // in seconds
+    if (diff < 60) return `${diff <= 1 ? 1 : diff} second${diff === 1 ? '' : 's'} ago`;
+    if (diff < 3600) {
+      const mins = Math.floor(diff / 60);
+      return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+    }
+    if (diff < 86400) {
+      const hours = Math.floor(diff / 3600);
+      return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    }
+    const days = Math.floor(diff / 86400);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
+  };
+
   const handleUnlinkWallet = async (address: string) => {
     setUnlinkingWallet(address);
     setError(null);
@@ -1202,6 +1239,17 @@ const SessionsSection = () => {
   const [locationCache, setLocationCache] = React.useState<{ [key: string]: string }>({});
   const [currentRefreshToken, setCurrentRefreshToken] = React.useState<string | null>(null);
 
+  // Helper function to format device information from uaparser object
+  const formatDeviceInfo = (device: any) => {
+    if (!device) return 'Unknown Device';
+    let browser = device.browser?.name || '';
+    let os = device.os?.name || '';
+    if (browser && os) return `${browser} on ${os}`;
+    if (browser) return browser;
+    if (os) return os;
+    return 'Unknown Device';
+  };
+
   const getLocationFromIP = async (ipAddress: string): Promise<string> => {
     // Check cache first
     if (locationCache[ipAddress]) {
@@ -1326,6 +1374,34 @@ const SessionsSection = () => {
     return new Date(dateString).toLocaleString();
   };
 
+  // Helper to format relative time (e.g., '1 second ago', '2 minutes ago')
+  const formatRelativeTime = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000); // in seconds
+    if (diff < 60) return `${diff <= 1 ? 1 : diff} second${diff === 1 ? '' : 's'} ago`;
+    if (diff < 3600) {
+      const mins = Math.floor(diff / 60);
+      return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+    }
+    if (diff < 86400) {
+      const hours = Math.floor(diff / 3600);
+      return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    }
+    const days = Math.floor(diff / 86400);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
+  };
+
+  // Helper to check if a date is within the last hour
+  const isRecentActivity = (dateString: string) => {
+    if (!dateString) return false;
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+    return diffInHours < 1; // Less than 1 hour ago
+  };
+
   return (
     <div style={styles.sessionsSection}>
       <h3>Session Management</h3>
@@ -1392,7 +1468,7 @@ const SessionsSection = () => {
                       Session ID: {session.id}
                     </div>
                     <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>
-                      <strong>Device:</strong> {parseUserAgent(session.userAgent).device}
+                      <strong>Device:</strong> {session.device ? formatDeviceInfo(session.device) : parseUserAgent(session.userAgent).device}
                     </div>
                     <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>
                       <strong>Location:</strong> {locationCache[session.ipAddress] || 'Loading...'}
@@ -1403,6 +1479,24 @@ const SessionsSection = () => {
                     <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>
                       <strong>Created:</strong> {formatDate(session.createdAt)}
                     </div>
+                    {session.lastSeenAt && (
+                      <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <strong>Last Seen:</strong> {formatRelativeTime(session.lastSeenAt)}
+                        {isRecentActivity(session.lastSeenAt) && (
+                          <span style={{
+                            backgroundColor: '#e7f3ff',
+                            color: '#0066cc',
+                            border: '1px solid #b3d9ff',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: 500,
+                            padding: '2px 8px',
+                          }}>
+                            Active now
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {session.expiresAt && (
                       <div style={{ fontSize: '14px', color: '#666', marginBottom: '5px' }}>
                         <strong>Expires:</strong> {formatDate(session.expiresAt)}
@@ -1461,6 +1555,7 @@ const SessionsSection = () => {
 // The main App component
 const App = () => {
   const appId = "684dea5189269732f9817561";
+  // const appId = "6861baea8971d18c3be38ff4";
 
   return (
 
@@ -1488,13 +1583,29 @@ const Footer = () => {
 
 // The AppContent component that renders different content based on auth state
 const AppContent = () => {
-  const { isAuthenticated } = usePr0d();
+  const { ready, isAuthenticated } = usePr0d();
+
+  if(ready) {
+    console.log('ready');
+  }
+
+  if(!ready) {
+    console.log('not ready');
+    return <div>Loading...</div>;
+  }
+
+  if(ready && isAuthenticated) {
+    console.log('authenticated');
+  } else {
+    console.log('not authenticated');
+  }
 
   return (
     <div style={styles.content}>
       <header style={styles.appHeader}>
         <h1> pr0d.io </h1>
       </header>
+      
 
       {isAuthenticated ? (
         <Dashboard />
@@ -2378,6 +2489,18 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     color: '#666',
     fontFamily: 'Monaco, Consolas, "Courier New", monospace'
+  },
+  deviceDetailsContainer: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: '#f8f9fa',
+    border: '1px solid #e9ecef',
+    borderRadius: 4,
+    fontSize: 12
+  },
+  deviceDetailSection: {
+    marginBottom: 4,
+    color: '#495057'
   }
 };
 

@@ -42,7 +42,7 @@ export default defineConfig({
     outDir: 'dist'
   },
   server: {
-    port: 3000,
+    port: 3001,
     open: true,
     allowedHosts: ['test.pr0d.io']
   }
