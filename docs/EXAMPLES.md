@@ -490,14 +490,15 @@ function WalletLinking() {
       const nonce = Math.random().toString(36).substring(2, 15);
       const message = `Link wallet ${address} with nonce: ${nonce}`;
 
-      // Sign message
-      const signature = await signMessage({ message });
+      // Sign message with wallet type tracking
+      const signatureData = await signMessageWithWallet(message);
+      console.log('Linking wallet:', signatureData.type);
 
-      // Link wallet
-      const success = await linkWallet(signature, nonce);
+      // Link wallet (wallet type is automatically included)
+      const success = await linkWallet(signatureData.signature, nonce, signatureData.type);
       
       if (success) {
-        setSuccess('Wallet linked successfully!');
+        setSuccess(`Wallet (${signatureData.type}) linked successfully!`);
       } else {
         setError('Failed to link wallet');
       }

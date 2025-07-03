@@ -1,6 +1,6 @@
 import React from 'react';
-import { FocusableButtonProps, WalletCircleProps, ProviderCircleProps, PasskeyCircleProps } from './interfaces';
 import FingerprintIcon from '@mui/icons-material/Fingerprint';
+import { FocusableButtonProps, WalletCircleProps, ProviderCircleProps, PasskeyCircleProps } from './interfaces';
 
 // Add CSS animation for spinner
 if (typeof document !== 'undefined') {
@@ -418,4 +418,4 @@ export const PasskeyStatusCircle = ({
             )}
         </div>
     );
-}; 
+};

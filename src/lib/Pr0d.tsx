@@ -5,13 +5,14 @@ import { createWagmiConfig } from './wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { jwtDecode } from "jwt-decode";
 
-import FingerprintIcon from '@mui/icons-material/Fingerprint';
+
 import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
 import CloseIcon from '@mui/icons-material/Close';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import SecurityIcon from '@mui/icons-material/Security';
+import FingerprintIcon from '@mui/icons-material/Fingerprint';
 
 import { AppConfig, User, AuthContextType } from './interfaces';
 import { Spinner, FocusableButton, WalletStatusCircle, ProviderStatusCircle, PasskeyStatusCircle } from './components';
@@ -1154,11 +1155,12 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
     };
 
     // Authenticate with wallet signature
-    const authenticateWallet = async (signature: string, nonce: string) => {
+    const authenticateWallet = async (signature: string, nonce: string, type?: string) => {
         try {
             const res = await axios.post(`${baseUrl}/api/wallet/auth`, {
                 signature,
-                nonce
+                nonce,
+                type: type || connectingWallet?.name || 'external'
             });
 
             handleTokens(res.data.data.access_token, res.data.data.refresh_token, true);
@@ -1216,13 +1218,13 @@ Issued At: ${components.issuedAt}`;
                     onSuccess: async (signature) => {
                         try {
                             if (isWalletLinking) {
-                                await linkWallet(signature, walletAuthData.nonce);
+                                await linkWallet(signature, walletAuthData.nonce, connectingWallet?.name);
                                 closePopup();
                                 // Reset linking state
                                 setIsWalletLinking(false);
                                 setWalletAuthCompleted(true);
                             } else {
-                                await authenticateWallet(signature, walletAuthData.nonce);
+                                await authenticateWallet(signature, walletAuthData.nonce, connectingWallet?.name);
                             }
                         } catch (e: any) {
                             console.error('Wallet operation error:', e);
@@ -1819,7 +1821,7 @@ Issued At: ${components.issuedAt}`;
         }
     };
 
-    const linkWallet = async (signature: string, nonce: string): Promise<boolean> => {
+    const linkWallet = async (signature: string, nonce: string, type?: string): Promise<boolean> => {
         if (!accessToken) {
             throw new Error('User must be authenticated to link wallet');
         }
@@ -1827,7 +1829,8 @@ Issued At: ${components.issuedAt}`;
         try {
             const res = await axios.post(`${baseUrl}/api/wallet/link`, {
                 signature,
-                nonce
+                nonce,
+                type: type || connectingWallet?.name || 'external'
             }, {
                 headers: {
                     'authorization': `Bearer ${accessToken}`
@@ -2177,6 +2180,32 @@ Issued At: ${components.issuedAt}`;
         }
     };
 
+    const signMessageWithWallet = async (message: string, type?: string): Promise<{ signature: string; address: string; message: string; type: string }> => {
+        if (!isConnected || !address) {
+            throw new Error('Wallet not connected');
+        }
+
+        return new Promise((resolve, reject) => {
+            signMessage(
+                { message },
+                {
+                    onSuccess: (signature) => {
+                        resolve({
+                            signature,
+                            address,
+                            message,
+                            type: type || connectingWallet?.name || 'external'
+                        });
+                    },
+                    onError: (error) => {
+                        console.error('Error signing message with wallet:', error);
+                        reject(new Error(error.message || 'Failed to sign message with wallet'));
+                    }
+                }
+            );
+        });
+    };
+
     const getAllSessions = async (): Promise<{ sessions: any[]; totalCount: number }> => {
         if (!accessToken) {
             throw new Error('User not authenticated');
@@ -2314,6 +2343,7 @@ Issued At: ${components.issuedAt}`;
         revokeAllSessions,
         revokeSession,
         teeSignMessage,
+        signMessageWithWallet,
         sendEmailCode,
         loginWithEmailCode,
         loginWithEmailCodeHeadless,
@@ -2993,7 +3023,7 @@ Issued At: ${components.issuedAt}`;
                                                     hoverBackgroundColor={isLightColor(appConfig?.background || '#ffffff') ? '#f8f9fa' : '#3a3a3a'}
                                                     defaultBackgroundColor={isLightColor(appConfig?.background || '#ffffff') ? '#ffffff' : '#2a2a2a'}
                                                 >
-                                                    <FingerprintIcon style={styles.providerIcon} />
+                                                    <FingerprintIcon className="w-4 h-4" />
                                                     {loading ? (
                                                         <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
                                                             <Spinner size={16} />

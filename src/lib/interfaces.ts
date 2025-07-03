@@ -78,6 +78,7 @@ export interface AuthContextType {
     revokeAllSessions: () => Promise<{ message: string; revokedCount: number }>;
     revokeSession: (sessionId: string) => Promise<{ message: string }>;
     teeSignMessage: (message: string) => Promise<{ signature: string; address: string; message: string }>;
+    signMessageWithWallet: (message: string, type?: string) => Promise<{ signature: string; address: string; message: string; type: string }>;
     sendEmailCode: (email: string) => Promise<any>;
     loginWithEmailCode: (email: string, code: string) => Promise<any>;
     loginWithEmailCodeHeadless: (email: string, code: string) => Promise<any>;
