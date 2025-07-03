@@ -107,6 +107,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
     const [isPasskeySupported, setIsPasskeySupported] = useState(false);
     const [passkeyLoading, setPasskeyLoading] = useState(false);
     const [isPasskeySetupMode, setIsPasskeySetupMode] = useState(false);
+    const [isInitializing, setIsInitializing] = useState(false);
 
     // Track if we just initiated a wallet connection
     const [isConnecting, setIsConnecting] = useState(false);
@@ -245,72 +246,133 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
     }, [appId, baseUrl, setAccessToken, setRefreshToken, setUser, visitorId]);
 
     useEffect(() => {
-        if (!initialAppConfig) {
-            const fetchAppConfig = async () => {
-                try {
-                    const res = await axios.get(`${baseUrl}/api/apps/${appId}`);
-                    setAppConfig(res.data.data);
-
-                    // Check access token before setting ready to true
-                    const accessToken = localStorage.getItem('pr0d:access_token');
-                    if (accessToken) {
-                        try {
-                            const decodedToken = jwtDecode(accessToken);
-                            if (decodedToken.exp && decodedToken.exp >= Date.now() / 1000) {
-                                // Token is valid, set it and get user data
-                                setAccessToken(accessToken);
-                                await getUser(accessToken);
-                            } else {
-                                // Token is expired, try to refresh
-                                await refreshSession();
-                            }
-                        } catch (error) {
-                            console.error('Failed to decode token:', error);
-                            // Clear invalid token
-                            localStorage.removeItem('pr0d:access_token');
-                            setAccessToken(null);
-                            setUser(null);
-                        }
-                    }
-                    
-                    setReady(true);
-                } catch (error) {
-                    console.error('Failed to fetch app configuration:', error);
-                    setReady(false);
-                }
-            };
-
-            fetchAppConfig();
-        } else {
-            // If we have initial app config, still check access token before setting ready
-            const checkAccessTokenAndSetReady = async () => {
+        const initializeAuth = async () => {
+            if (isInitializing) return; // still guard against concurrent inits
+            setIsInitializing(true);
+    
+            try {
                 const accessToken = localStorage.getItem('pr0d:access_token');
+    
                 if (accessToken) {
                     try {
                         const decodedToken = jwtDecode(accessToken);
-                        if (decodedToken.exp && decodedToken.exp >= Date.now() / 1000) {
-                            // Token is valid, set it and get user data
+                        const isExpired = decodedToken.exp && decodedToken.exp < Date.now() / 1000;
+    
+                        if (!isExpired) {
+                            console.log('token is not expired');
                             setAccessToken(accessToken);
                             await getUser(accessToken);
-                        } else {
-                            // Token is expired, try to refresh
-                            await refreshSession();
+                            setReady(true);
+                            return;
+                        }
+    
+                        const refreshToken = localStorage.getItem('pr0d:refresh_token');
+                        if (refreshToken) {
+                            const response = await axios.post(`${baseUrl}/api/sessions/refresh`, {
+                                refresh_token: refreshToken,
+                            });
+    
+                            const newAccessToken = response.data.data.access_token;
+                            const newRefreshToken = response.data.data.refresh_token;
+    
+                            localStorage.setItem('pr0d:access_token', newAccessToken);
+                            localStorage.setItem('pr0d:refresh_token', newRefreshToken);
+    
+                            setAccessToken(newAccessToken);
+                            setRefreshToken(newRefreshToken);
+                            await getUser(newAccessToken);
+                            setReady(true);
+                            return;
                         }
                     } catch (error) {
-                        console.error('Failed to decode token:', error);
-                        // Clear invalid token
+                        console.error('Failed to decode or refresh token:', error);
                         localStorage.removeItem('pr0d:access_token');
+                        localStorage.removeItem('pr0d:refresh_token');
                         setAccessToken(null);
+                        setRefreshToken(null);
                         setUser(null);
                     }
                 }
-                
+            } catch (error) {
+                console.error('Failed to initialize auth:', error);
+            } finally {
+                setIsInitializing(false);
                 setReady(true);
-            };
+            }
+        };
+    
+        initializeAuth();
+    }, [baseUrl, appId]);
+    
 
-            checkAccessTokenAndSetReady();
-        }
-    }, [appId, initialAppConfig]);
+    // useEffect(() => {
+    //     if (!initialAppConfig) {
+    //         alert('fetching app config');
+    //         const fetchAppConfig = async () => {
+    //             try {
+    //                 const res = await axios.get(`${baseUrl}/api/apps/${appId}`);
+    //                 setAppConfig(res.data.data);
+
+    //                 // Check access token before setting ready to true
+    //                 const accessToken = localStorage.getItem('pr0d:access_token');
+    //                 if (accessToken) {
+    //                     try {
+    //                         const decodedToken = jwtDecode(accessToken);
+    //                         if (decodedToken.exp && decodedToken.exp >= Date.now() / 1000) {
+    //                             // Token is valid, set it and get user data
+    //                             setAccessToken(accessToken);
+    //                             await getUser(accessToken);
+    //                         } else {
+    //                             // Token is expired, try to refresh
+    //                             await refreshSession();
+    //                         }
+    //                     } catch (error) {
+    //                         console.error('Failed to decode token:', error);
+    //                         // Clear invalid token
+    //                         localStorage.removeItem('pr0d:access_token');
+    //                         setAccessToken(null);
+    //                         setUser(null);
+    //                     }
+    //                 }
+                    
+    //                 setReady(true);
+    //             } catch (error) {
+    //                 console.error('Failed to fetch app configuration:', error);
+    //                 setReady(false);
+    //             }
+    //         };
+
+    //         fetchAppConfig();
+    //     } else {
+    //         // If we have initial app config, still check access token before setting ready
+    //         const checkAccessTokenAndSetReady = async () => {
+    //             const accessToken = localStorage.getItem('pr0d:access_token');
+    //             if (accessToken) {
+    //                 try {
+    //                     const decodedToken = jwtDecode(accessToken);
+    //                     if (decodedToken.exp && decodedToken.exp >= Date.now() / 1000) {
+    //                         // Token is valid, set it and get user data
+    //                         setAccessToken(accessToken);
+    //                         await getUser(accessToken);
+    //                     } else {
+    //                         // Token is expired, try to refresh
+    //                         await refreshSession();
+    //                     }
+    //                 } catch (error) {
+    //                     console.error('Failed to decode token:', error);
+    //                     // Clear invalid token
+    //                     localStorage.removeItem('pr0d:access_token');
+    //                     setAccessToken(null);
+    //                     setUser(null);
+    //                 }
+    //             }
+                
+    //             setReady(true);
+    //         };
+
+    //         checkAccessTokenAndSetReady();
+    //     }
+    // }, [appId, initialAppConfig]);
 
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
