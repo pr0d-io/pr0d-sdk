@@ -9373,7 +9373,7 @@ const Li = ({ size: t = 16 }) => /* @__PURE__ */ W.jsx(
                 return;
               }
             } catch (te) {
-              console.error("Failed to decode or refresh token:", te), localStorage.removeItem("pr0d:access_token"), localStorage.removeItem("pr0d:refresh_token"), o(null), c(null), d(null);
+              console.error("Failed to decode or refresh token:", te), localStorage.removeItem("pr0d:access_token"), localStorage.removeItem("pr0d:refresh_token"), o(null), c(null), d(null), M(!0);
             }
         } catch (X) {
           console.error("Failed to initialize auth:", X);

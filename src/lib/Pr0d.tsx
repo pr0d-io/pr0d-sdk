@@ -291,6 +291,7 @@ const Pr0d = ({ appId, children, appConfig: initialAppConfig, visitorId: initial
                         setAccessToken(null);
                         setRefreshToken(null);
                         setUser(null);
+                        setReady(true);
                     }
                 }
             } catch (error) {
