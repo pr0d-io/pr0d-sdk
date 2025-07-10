@@ -1,6 +1,3 @@
-import Pr0dProvider from './Pr0d';
-import { usePr0d } from './context';
-
-export default Pr0dProvider;
-
-export { usePr0d };
+export { default as Pr0dProvider } from './Pr0d';
+export { usePr0d } from './context';
+export type { AppConfig, User } from './interfaces';

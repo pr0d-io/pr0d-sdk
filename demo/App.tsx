@@ -1,5 +1,5 @@
 import React from 'react';
-import Pr0dProvider, { usePr0d } from '../src';
+import { Pr0dProvider, usePr0d } from '../src';
 
 const Home = () => {
     const {
@@ -147,31 +147,35 @@ const Home = () => {
                     </div>
                     
                     <div className="p-6">
-                        <div className="mb-6">
-                            <button 
-                                className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 mr-3"
-                                onClick={() => triggerMfaSetup()}
-                            >
-                                Setup MFA
-                            </button>
-                            <button 
-                                className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 mr-3"
-                                onClick={updateUser}
-                            >
-                                Update User
-                            </button>
-                            <button 
-                                className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 mr-3"
-                                onClick={sessions.refreshSession}
-                            >
-                                Refresh Session
-                            </button>
-                            <button 
-                                className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
-                                onClick={logout}
-                            >
-                                Logout
-                            </button>
+                        <div className="mb-6 flex justify-between items-center">
+                            <div>
+                                <button 
+                                    className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 mr-3"
+                                    onClick={() => triggerMfaSetup()}
+                                >
+                                    Setup MFA
+                                </button>
+                                <button 
+                                    className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                                    onClick={updateUser}
+                                >
+                                    Update User
+                                </button>
+                            </div>
+                            <div>
+                                <button 
+                                    className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 mr-3"
+                                    onClick={sessions.refreshSession}
+                                >
+                                    Refresh Session
+                                </button>
+                                <button 
+                                    className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200"
+                                    onClick={logout}
+                                >
+                                    Logout
+                                </button>
+                            </div>
                         </div>
 
                         <div className="grid md:grid-cols-2 gap-6">
