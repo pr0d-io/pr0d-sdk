@@ -21,13 +21,14 @@ const Home = () => {
         triggerProviderLink,
         triggerPasskeySetupDirect,
         triggerTotpSetup,   
+        triggerTotpDisable,
         triggerWalletLink,
     } = usePr0d();
 
     const promptEmailAndCode = async (action: 'login' | 'link') => {
         const email = window.prompt('Enter the email');
         if (!email) return;
-        await login.sendEmailCode(email);
+        await login.sendEmailCode(email, false);
         const code = window.prompt('Enter the code');
         if (!code) return;
         if (action === 'login') {
@@ -229,7 +230,7 @@ const Home = () => {
                                 ) : (
                                     <button 
                                         className="bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 text-sm"
-                                        onClick={unlink.totp}
+                                        onClick={triggerTotpDisable}
                                     >
                                         Disable TOTP
                                     </button>

@@ -295,7 +295,7 @@ const spinnerKeyframes = `
 `;
 
 const AuthPopup = () => {
-    const { popup, setPopupView, closePopup, goBackFromView, resetWalletStates, resetOAuthStates, appConfig, login, helpers, currentProvider, oauthError, user, link, renderQRCode, isAuthenticated } = usePr0d();
+    const { popup, setPopupView, closePopup, goBackFromView, resetWalletStates, resetOAuthStates, appConfig, login, helpers, currentProvider, oauthError, user, link, unlink, renderQRCode, isAuthenticated } = usePr0d();
     const { connectors, walletConnectUri, connectingWallet, walletError, recentConnectorId, isWalletLinkingMode } = helpers;
 
     // State management
@@ -319,6 +319,7 @@ const AuthPopup = () => {
     // Visual feedback states for code inputs
     const [codeStatus, setCodeStatus] = useState<'normal' | 'success' | 'error'>('normal');
     const [mfaCodeStatus, setMfaCodeStatus] = useState<'normal' | 'success' | 'error'>('normal');
+    const [resendCooldown, setResendCooldown] = useState(0);
 
     // Refs
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -428,6 +429,16 @@ const AuthPopup = () => {
             qrCodeRef.current.innerHTML = qrData;
         }
     }, [mfaStep, qrData]);
+
+    useEffect(() => {
+        if (step === 'code' || popup.view === 'email-link-code') {
+            setResendCooldown(30);
+            const interval = setInterval(() => {
+                setResendCooldown(prev => Math.max(0, prev - 1));
+            }, 1000);
+            return () => clearInterval(interval);
+        }
+    }, [step, popup.view]);
 
     if (!popup.show) return null;
 
@@ -1237,6 +1248,18 @@ const AuthPopup = () => {
         }
     };
 
+    const handleEmailLinkPaste = (e: React.ClipboardEvent) => {
+        e.preventDefault();
+        const pastedData = e.clipboardData.getData('text').trim();
+        if (/^\d{6}$/.test(pastedData)) {
+            const digits = pastedData.split('');
+            setCode(digits);
+            setTimeout(() => {
+                handleVerifyEmailLinkCode(pastedData);
+            }, 100);
+        }
+    };
+
     const handleMfaPaste = (e: React.ClipboardEvent) => {
         e.preventDefault();
         const pastedData = e.clipboardData.getData('text').trim();
@@ -1245,6 +1268,18 @@ const AuthPopup = () => {
             setMfaCode(digits);
             setTimeout(() => {
                 handleVerifyMfaCode(pastedData);
+            }, 100);
+        }
+    };
+
+    const handleMfaUnlinkPaste = (e: React.ClipboardEvent) => {
+        e.preventDefault();
+        const pastedData = e.clipboardData.getData('text').trim();
+        if (/^\d{6}$/.test(pastedData)) {
+            const digits = pastedData.split('');
+            setMfaCode(digits);
+            setTimeout(() => {
+                handleUnlinkMfaCode(pastedData);
             }, 100);
         }
     };
@@ -1264,7 +1299,7 @@ const AuthPopup = () => {
         setError(null);
 
         try {
-            await login.sendEmailCode(email);
+            await login.sendEmailCode(email, false);
             setStep('code');
             setTimeout(() => {
                 if (inputRefs.current[0]) {
@@ -1294,12 +1329,9 @@ const AuthPopup = () => {
         try {
             await login.withEmail(email, codeToVerify);
             setCodeStatus('success'); // Only show success after actual login success
-            // Brief delay to show success state before closing
-            setTimeout(() => {
-                closePopup();
-                setStep('email');
-                setCode(['', '', '', '', '', '']);
-            }, 500);
+            closePopup();
+            setStep('email');
+            setCode(['', '', '', '', '', '']);
         } catch (e: any) {
             setCodeStatus('error'); // Show error state
             setError(e.response?.data?.message || e.message || 'Invalid verification code');
@@ -1323,7 +1355,7 @@ const AuthPopup = () => {
         setError(null);
 
         try {
-            await link.sendEmailCode(email);
+            await link.sendEmailCode(email, false);
             setPopupView('email-link-code');
             setTimeout(() => {
                 if (inputRefs.current[0]) {
@@ -1353,12 +1385,9 @@ const AuthPopup = () => {
         try {
             await link.email(email, codeToVerify);
             setCodeStatus('success'); // Only show success after actual link success
-            // Brief delay to show success state before closing
-            setTimeout(() => {
-                closePopup();
-                setStep('email');
-                setCode(['', '', '', '', '', '']);
-            }, 500);
+            closePopup();
+            setStep('email');
+            setCode(['', '', '', '', '', '']);
         } catch (e: any) {
             setCodeStatus('error'); // Show error state
             setError(e.response?.data?.message || e.message || 'Invalid verification code');
@@ -1373,12 +1402,12 @@ const AuthPopup = () => {
         setError(null);
         try {
             console.log('Starting MFA setup...');
-            
+
             // Create a temporary element just to call the API and get the data
             const tempDiv = document.createElement('div');
             const data = await renderQRCode(tempDiv, '');
             console.log('Got MFA data:', data);
-            
+
             // Store both the secret and the QR data for later rendering
             setMfaSecret(data.secret);
             // Store the QR data URL that was generated
@@ -1388,7 +1417,7 @@ const AuthPopup = () => {
                     setQrData(svgElement.outerHTML);
                 }
             }
-            
+
             // Now transition to QR view - reuse the existing multi-choice MFA QR view
             if (popup.view === 'mfa-totp') {
                 // Direct TOTP mode - switch to multi-choice MFA view and show QR
@@ -1398,11 +1427,11 @@ const AuthPopup = () => {
                 // Multi-choice MFA mode - use mfaStep
                 setMfaStep('qr');
             }
-            
+
         } catch (error: any) {
             console.error('MFA setup error:', error);
             setError(error.response?.data?.message || error.message || 'Failed to load MFA setup.');
-            
+
             // Check if we're in direct TOTP mode
             if (popup.view === 'mfa-totp') {
                 // Direct TOTP mode - show dedicated error view
@@ -1430,17 +1459,40 @@ const AuthPopup = () => {
         try {
             await link.totp(codeToVerify);
             setMfaCodeStatus('success'); // Only show success after actual verification success
-            // Brief delay to show success state before closing
-            setTimeout(() => {
-                closePopup();
-                setMfaStep('method');
-                setMfaCode(['', '', '', '', '', '']);
-                setMfaSecret(null);
-                setQrCodeUrl(null);
-            }, 500);
+            closePopup();
+            setMfaStep('method');
+            setMfaCode(['', '', '', '', '', '']);
+            setMfaSecret(null);
+            setQrCodeUrl(null);
         } catch (error: any) {
             setMfaCodeStatus('error'); // Show error state
             setError(error.response?.data?.message || error.message || 'Failed to verify MFA code.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleUnlinkMfaCode = async (verificationCode?: string) => {
+        const codeToVerify = verificationCode || mfaCode.join('');
+
+        if (!codeToVerify || codeToVerify.length !== 6) {
+            setError('Please enter a valid 6-digit code');
+            setMfaCodeStatus('error');
+            return;
+        }
+
+        setLoading(true);
+        setError(null);
+        setMfaCodeStatus('normal');
+
+        try {
+            await unlink.totp(codeToVerify);
+            setMfaCodeStatus('success'); // Only show success after actual unlink success
+            closePopup();
+            setMfaCode(['', '', '', '', '', '']);
+        } catch (error: any) {
+            setMfaCodeStatus('error'); // Show error state
+            setError(error.response?.data?.message || error.message || 'Failed to disable TOTP.');
         } finally {
             setLoading(false);
         }
@@ -1470,7 +1522,7 @@ const AuthPopup = () => {
         if (mfaSecret && user && appConfig) {
             const appName = appConfig.name || 'pr0d.io';
             const userEmail = user.email?.email || 'user';
-            
+
             // Create backup data
             const backupData = {
                 service: appName,
@@ -1484,7 +1536,7 @@ const AuthPopup = () => {
             const content = JSON.stringify(backupData, null, 2);
             const blob = new Blob([content], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
-            
+
             // Create download link
             const link = document.createElement('a');
             link.href = url;
@@ -1492,10 +1544,10 @@ const AuthPopup = () => {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            
+
             // Clean up
             URL.revokeObjectURL(url);
-            
+
             // Show success feedback
             setBackupDownloaded(true);
             setTimeout(() => setBackupDownloaded(false), 2000);
@@ -1513,24 +1565,19 @@ const AuthPopup = () => {
 
         try {
             setMfaStep('passkey');
-            
-            // Wait a moment for UI to update
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
+
             await link.passkey();
-            
+
             // Show success view
             setMfaStep('passkey-success');
-            
+
             // Close popup after showing success
-            setTimeout(() => {
-                closePopup();
-                setMfaStep('method');
-            }, 2000);
+            closePopup();
+            setMfaStep('method');
         } catch (err: any) {
             console.error('Passkey setup failed:', err);
             setError(err.response?.data?.message || err.message || 'Failed to create passkey');
-            
+
             // Check if we're in direct passkey mode or multi-choice MFA mode
             if (popup.view === 'mfa-passkey') {
                 // Direct passkey mode - show dedicated error view
@@ -1568,6 +1615,19 @@ const AuthPopup = () => {
         }
     };
 
+    const handleResend = async () => {
+        if (resendCooldown > 0) return;
+        setLoading(true);
+        try {
+            await login.sendEmailCode(email, true);
+            setResendCooldown(30);
+        } catch (e: any) {
+            setError(e.response?.data?.message || e.message || 'Failed to resend code');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <>
             <div style={styles.overlay} onClick={(e) => {
@@ -1598,8 +1658,9 @@ const AuthPopup = () => {
                         (popup.view === 'wallet-verifying' && !(isAuthenticated && isWalletLinkingMode)) ||
                         (popup.view === 'wallet-error' && !(isAuthenticated && isWalletLinkingMode)) ||
                         (popup.view === 'oauth-error' && !isAuthenticated) ||
-                        (popup.view === 'mfa' && (mfaStep === 'qr' || mfaStep === 'code'))) && (
-                <button
+                        (popup.view === 'mfa' && (mfaStep === 'qr' || mfaStep === 'code')) ||
+                        popup.view === 'mfa-totp-disable') && (
+                            <button
                                 style={styles.backArrow}
                                 onClick={() => {
                                     if (popup.view === 'email-code') {
@@ -1618,6 +1679,10 @@ const AuthPopup = () => {
                                         }
                                         setError(null);
                                         setMfaCode(['', '', '', '', '', '']);
+                                    } else if (popup.view === 'mfa-totp-disable') {
+                                        closePopup();
+                                        setError(null);
+                                        setMfaCode(['', '', '', '', '', '']);
                                     } else {
                                         // Reset all relevant states when going back
                                         goBackFromView(popup.view);
@@ -1628,11 +1693,11 @@ const AuthPopup = () => {
                                 }}
                             >
                                 <ArrowLeft size={16} />
-                </button>
+                            </button>
                         )}
 
                     {/* Method Selection View */}
-                {popup.view === 'method-select' && (
+                    {popup.view === 'method-select' && (
                         <div style={{ textAlign: 'center' }}>
                             {step === 'email' ? (
                                 <>
@@ -1663,7 +1728,7 @@ const AuthPopup = () => {
                                                 }
                                             }}
                                         />
-                            <button
+                                        <button
                                             style={{
                                                 ...styles.inputSubmitButton,
                                                 opacity: (loadingButton === 'email-submit' || !email || !isValidEmail(email)) ? 0.3 : 1,
@@ -1679,10 +1744,10 @@ const AuthPopup = () => {
                                         >
                                             Submit
                                             {loadingButton === 'email-submit' && <Spinner size={12} />}
-                            </button>
+                                        </button>
                                     </div>
 
-                        {appConfig?.options?.google && (
+                                    {appConfig?.options?.google && (
                                         <FocusableButton
                                             id="google-login"
                                             style={styles.altButton}
@@ -1864,9 +1929,9 @@ const AuthPopup = () => {
                                                 ref={(el) => { inputRefs.current[index] = el; }}
                                                 style={{
                                                     ...styles.codeInput,
-                                                    borderColor: codeStatus === 'error' ? '#dc3545' : 
-                                                               codeStatus === 'success' ? '#4CAF50' : 
-                                                               focusedInput === `login-code-${index}` ? accent : (isLightColor(background) ? '#e5e7eb' : '#636363'),
+                                                    borderColor: codeStatus === 'error' ? '#dc3545' :
+                                                        codeStatus === 'success' ? '#4CAF50' :
+                                                            focusedInput === `login-code-${index}` ? accent : (isLightColor(background) ? '#e5e7eb' : '#636363'),
                                                     borderWidth: (codeStatus === 'error' || codeStatus === 'success') ? '2px' : '1px'
                                                 }}
                                                 type="text"
@@ -1878,23 +1943,45 @@ const AuthPopup = () => {
                                                 onBlur={() => setFocusedInput(null)}
                                                 onKeyDown={(e) => handleKeyDown(index, e)}
                                                 autoComplete="one-time-code"
+                                                disabled={loading}
                                             />
                                         ))}
                                     </div>
-                                    {error && <div style={styles.error}>{error}</div>}
-                            <button
-                                        style={{
-                                            ...styles.backButton,
-                                            color: accent
-                                        }}
-                                        onClick={() => {
-                                            setStep('email');
-                                            setError(null);
-                                            setCode(['', '', '', '', '', '']);
-                                        }}
-                                    >
-                                        Back to Email
-                            </button>
+                                    <div style={{ marginTop: 16, height: 24, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                        {loading ? (
+                                            <div style={{ width: 24, height: 24, border: '2px solid #f3f3f3', borderTop: `2px solid ${accent}`, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                        ) : error ? (
+                                            <div style={{ ...styles.error, fontSize: 14 }}>{error}</div>
+                                        ) : null}
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: 16, gap: '20px' }}>
+                                        <a
+                                            onClick={() => {
+                                                setStep('email');
+                                                setError(null);
+                                                setCode(['', '', '', '', '', '']);
+                                            }}
+                                            style={{
+                                                color: accent,
+                                                cursor: 'pointer',
+                                                fontSize: 14,
+                                                textDecoration: 'none'
+                                            }}
+                                        >
+                                            Back to Email
+                                        </a>
+                                        <a
+                                            onClick={handleResend}
+                                            style={{
+                                                color: resendCooldown > 0 ? accent : accent,
+                                                cursor: resendCooldown > 0 ? 'not-allowed' : 'pointer',
+                                                fontSize: 14,
+                                                textDecoration: 'none'
+                                            }}
+                                        >
+                                            Resend{resendCooldown > 0 ? ` (${resendCooldown}s)` : ''}
+                                        </a>
+                                    </div>
                                 </>
                             )}
                         </div>
@@ -1947,7 +2034,7 @@ const AuthPopup = () => {
                                     {loadingButton === 'email-link-submit' && <Spinner size={12} />}
                                 </button>
                             </div>
-                            
+
                             {error && <div style={styles.error}>{error}</div>}
                         </div>
                     )}
@@ -1963,16 +2050,16 @@ const AuthPopup = () => {
                                 Enter the 6-digit code sent to<br />
                                 <strong>{email}</strong>
                             </p>
-                            <div style={styles.codeContainer} onPaste={handlePaste}>
+                            <div style={styles.codeContainer} onPaste={handleEmailLinkPaste}>
                                 {code.map((digit, index) => (
                                     <input
                                         key={index}
                                         ref={(el) => { inputRefs.current[index] = el; }}
                                         style={{
                                             ...styles.codeInput,
-                                            borderColor: codeStatus === 'error' ? '#dc3545' : 
-                                                       codeStatus === 'success' ? '#4CAF50' : 
-                                                       focusedInput === `link-code-${index}` ? accent : (isLightColor(background) ? '#e5e7eb' : '#636363'),
+                                            borderColor: codeStatus === 'error' ? '#dc3545' :
+                                                codeStatus === 'success' ? '#4CAF50' :
+                                                    focusedInput === `link-code-${index}` ? accent : (isLightColor(background) ? '#e5e7eb' : '#636363'),
                                             borderWidth: (codeStatus === 'error' || codeStatus === 'success') ? '2px' : '1px'
                                         }}
                                         type="text"
@@ -1983,7 +2070,7 @@ const AuthPopup = () => {
                                             if (/^[0-9]?$/.test(e.target.value)) {
                                                 if (error) setError(null);
                                                 setCodeStatus('normal');
-                                                
+
                                                 const newCode = [...code];
                                                 newCode[index] = e.target.value;
                                                 setCode(newCode);
@@ -2004,23 +2091,45 @@ const AuthPopup = () => {
                                             }
                                         }}
                                         autoComplete="one-time-code"
+                                        disabled={loading}
                                     />
                                 ))}
                             </div>
-                            {error && <div style={styles.error}>{error}</div>}
-                            <button
-                                style={{
-                                    ...styles.backButton,
-                                    color: accent
-                                }}
-                                onClick={() => {
-                                    setPopupView('email-link');
-                                    setError(null);
-                                    setCode(['', '', '', '', '', '']);
-                                }}
-                            >
-                                Back to Email
-                            </button>
+                            <div style={{ marginTop: 16, height: 24, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                {loading ? (
+                                    <div style={{ width: 24, height: 24, border: '2px solid #f3f3f3', borderTop: `2px solid ${accent}`, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                ) : error ? (
+                                    <div style={{ ...styles.error, fontSize: 14 }}>{error}</div>
+                                ) : null}
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: 16, gap: '20px' }}>
+                                <a
+                                    onClick={() => {
+                                        setPopupView('email-link');
+                                        setError(null);
+                                        setCode(['', '', '', '', '', '']);
+                                    }}
+                                    style={{
+                                        color: accent,
+                                        cursor: 'pointer',
+                                        fontSize: 14,
+                                        textDecoration: 'none'
+                                    }}
+                                >
+                                    Back to Email
+                                </a>
+                                <a
+                                    onClick={handleResend}
+                                    style={{
+                                        color: resendCooldown > 0 ? '#888' : accent,
+                                        cursor: resendCooldown > 0 ? 'not-allowed' : 'pointer',
+                                        fontSize: 14,
+                                        textDecoration: 'none'
+                                    }}
+                                >
+                                    Resend{resendCooldown > 0 ? ` (${resendCooldown}s)` : ''}
+                                </a>
+                            </div>
                         </div>
                     )}
 
@@ -2042,9 +2151,9 @@ const AuthPopup = () => {
                                         ref={(el) => { inputRefs.current[index] = el; }}
                                         style={{
                                             ...styles.codeInput,
-                                            borderColor: codeStatus === 'error' ? '#dc3545' : 
-                                                               codeStatus === 'success' ? '#4CAF50' : 
-                                                               focusedInput === `login-code-${index}` ? accent : (isLightColor(background) ? '#e5e7eb' : '#636363'),
+                                            borderColor: codeStatus === 'error' ? '#dc3545' :
+                                                codeStatus === 'success' ? '#4CAF50' :
+                                                    focusedInput === `login-code-${index}` ? accent : (isLightColor(background) ? '#e5e7eb' : '#636363'),
                                             borderWidth: (codeStatus === 'error' || codeStatus === 'success') ? '2px' : '1px'
                                         }}
                                         type="text"
@@ -2056,23 +2165,45 @@ const AuthPopup = () => {
                                         onBlur={() => setFocusedInput(null)}
                                         onKeyDown={(e) => handleKeyDown(index, e)}
                                         autoComplete="one-time-code"
+                                        disabled={loading}
                                     />
                                 ))}
                             </div>
-                            {error && <div style={styles.error}>{error}</div>}
-                            <button
-                                style={{
-                                    ...styles.backButton,
-                                    color: accent
-                                }}
-                                onClick={() => {
-                                    setStep('email');
-                                    setError(null);
-                                    setCode(['', '', '', '', '', '']);
-                                }}
-                            >
-                                Back to Email
-                            </button>
+                            <div style={{ marginTop: 16, height: 24, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                {loading ? (
+                                    <div style={{ width: 24, height: 24, border: '2px solid #f3f3f3', borderTop: `2px solid ${accent}`, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                ) : error ? (
+                                    <div style={{ ...styles.error, fontSize: 14 }}>{error}</div>
+                                ) : null}
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: 16, gap: '20px' }}>
+                                <a
+                                    onClick={() => {
+                                        setStep('email');
+                                        setError(null);
+                                        setCode(['', '', '', '', '', '']);
+                                    }}
+                                    style={{
+                                        color: accent,
+                                        cursor: 'pointer',
+                                        fontSize: 14,
+                                        textDecoration: 'none'
+                                    }}
+                                >
+                                    Back to Email
+                                </a>
+                                <a
+                                    onClick={handleResend}
+                                    style={{
+                                        color: resendCooldown > 0 ? '#888' : accent,
+                                        cursor: resendCooldown > 0 ? 'not-allowed' : 'pointer',
+                                        fontSize: 14,
+                                        textDecoration: 'none'
+                                    }}
+                                >
+                                    Resend{resendCooldown > 0 ? ` (${resendCooldown}s)` : ''}
+                                </a>
+                            </div>
                         </div>
                     )}
 
@@ -2207,13 +2338,13 @@ const AuthPopup = () => {
 
                                     {/* Mobile Deeplink Button */}
                                     {isMobileDevice() && (
-                            <button
+                                        <button
                                             style={styles.mobileDeepLinkButton}
                                             onClick={handleMobileDeepLink}
-                            >
+                                        >
                                             <Smartphone style={styles.mobileIcon} />
                                             Open in {connectingWallet?.name || 'Wallet'}
-                            </button>
+                                        </button>
                                     )}
                                 </div>
                             ) : (
@@ -2240,9 +2371,9 @@ const AuthPopup = () => {
                                         }
                                     </p>
                                 </div>
-                        )}
-                    </div>
-                )}
+                            )}
+                        </div>
+                    )}
 
                     {/* Wallet Signing View */}
                     {popup.view === 'wallet-signing' && (
@@ -2281,7 +2412,7 @@ const AuthPopup = () => {
                             <p style={styles.walletSigningMessage}>
                                 Successfully connected to your wallet, obtaining a challenge to sign...
                             </p>
-                </div>
+                        </div>
                     )}
 
                     {/* Wallet Verifying View */}
@@ -2301,7 +2432,7 @@ const AuthPopup = () => {
                             <p style={styles.walletSigningMessage}>
                                 Confirming your identity with the server, this should only take a moment.
                             </p>
-            </div>
+                        </div>
                     )}
 
                     {/* Wallet Login Success View */}
@@ -2320,7 +2451,7 @@ const AuthPopup = () => {
                             <p style={styles.walletSigningMessage}>
                                 You are ready to go. This window will close automatically.
                             </p>
-        </div>
+                        </div>
                     )}
 
                     {/* Wallet Error View */}
@@ -2453,7 +2584,7 @@ const AuthPopup = () => {
                                     if (oauthError?.provider && oauthError.provider !== 'unknown') {
                                         resetOAuthStates();
                                         setPopupView('oauth-loading');
-                                        
+
                                         // Retry the specific provider login
                                         setTimeout(() => {
                                             switch (oauthError.provider) {
@@ -2744,14 +2875,14 @@ const AuthPopup = () => {
                                     <p style={styles.mfaInstruction}>To continue, enter the 6-digit code generated from your authenticator app.</p>
                                     <div style={styles.codeContainer} onPaste={handleMfaPaste}>
                                         {mfaCode.map((digit, index) => (
-            <input
+                                            <input
                                                 key={index}
                                                 ref={(el) => { mfaInputRefs.current[index] = el; }}
                                                 style={{
                                                     ...styles.codeInput,
-                                                    borderColor: mfaCodeStatus === 'error' ? '#dc3545' : 
-                                                               mfaCodeStatus === 'success' ? '#4CAF50' : 
-                                                               focusedInput === `mfa-code-${index}` ? (appConfig?.accent || (isLightColor(appConfig?.background || '#ffffff') ? '#e5e7eb' : '#636363')) : (isLightColor(appConfig?.background || '#ffffff') ? '#e5e7eb' : '#636363'),
+                                                    borderColor: mfaCodeStatus === 'error' ? '#dc3545' :
+                                                        mfaCodeStatus === 'success' ? '#4CAF50' :
+                                                            focusedInput === `mfa-code-${index}` ? (appConfig?.accent || (isLightColor(appConfig?.background || '#ffffff') ? '#e5e7eb' : '#636363')) : (isLightColor(appConfig?.background || '#ffffff') ? '#e5e7eb' : '#636363'),
                                                     borderWidth: (mfaCodeStatus === 'error' || mfaCodeStatus === 'success') ? '2px' : '1px'
                                                 }}
                                                 type="text"
@@ -2762,7 +2893,7 @@ const AuthPopup = () => {
                                                     if (/^[0-9]?$/.test(e.target.value)) {
                                                         if (error) setError(null);
                                                         setMfaCodeStatus('normal'); // Reset visual state when typing
-                                                        
+
                                                         const newCode = [...mfaCode];
                                                         newCode[index] = e.target.value;
                                                         setMfaCode(newCode);
@@ -2782,24 +2913,35 @@ const AuthPopup = () => {
                                                         mfaInputRefs.current[index - 1]?.focus();
                                                     }
                                                 }}
+                                                disabled={loading}
                                             />
                                         ))}
                                     </div>
-                                    {error && <div style={styles.error}>{error}</div>}
-            <button
-                                        style={{
-                                            ...styles.backButton,
-                                            color: appConfig?.accent || '#555'
-                                        }}
-                                        onClick={() => {
-                                            setMfaStep('qr');
-                                            setError(null);
-                                            setMfaCode(['', '', '', '', '', '']);
-                                        }}
-                                    >
-                                        Back to QR Code
-            </button>
-        </div>
+                                    <div style={{ marginTop: 16, height: 24, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                        {loading ? (
+                                            <div style={{ width: 24, height: 24, border: '2px solid #f3f3f3', borderTop: `2px solid ${appConfig?.accent || '#007bff'}`, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                        ) : error ? (
+                                            <div style={{ ...styles.error, fontSize: 14 }}>{error}</div>
+                                        ) : null}
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: 16, gap: '20px' }}>
+                                        <a
+                                            onClick={() => {
+                                                setMfaStep('qr');
+                                                setError(null);
+                                                setMfaCode(['', '', '', '', '', '']);
+                                            }}
+                                            style={{
+                                                color: accent,
+                                                cursor: 'pointer',
+                                                fontSize: 14,
+                                                textDecoration: 'none'
+                                            }}
+                                        >
+                                            Back to QR Code
+                                        </a>
+                                    </div>
+                                </div>
                             )}
 
                             {mfaStep === 'passkey' && (
@@ -3014,6 +3156,71 @@ const AuthPopup = () => {
                                 >
                                     Try Again
                                 </FocusableButton>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TOTP Disable View */}
+                    {popup.view === 'mfa-totp-disable' && (
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Shield size={48} color="#dc3545" />
+                            </div>
+                            <h3 style={styles.title}>Disable Authenticator</h3>
+                            <p style={{ ...styles.subtitle, color: mutedTextColor, marginBottom: 24 }}>
+                                Enter your current 6-digit authenticator code to confirm removal.
+                            </p>
+                            
+                            <div style={styles.codeContainer} onPaste={handleMfaUnlinkPaste}>
+                                {mfaCode.map((digit, index) => (
+                                    <input
+                                        key={index}
+                                        ref={(el) => { mfaInputRefs.current[index] = el; }}
+                                        style={{
+                                            ...styles.codeInput,
+                                            borderColor: mfaCodeStatus === 'error' ? '#dc3545' :
+                                                mfaCodeStatus === 'success' ? '#4CAF50' :
+                                                    focusedInput === `mfa-unlink-code-${index}` ? '#dc3545' : (isLightColor(background) ? '#e5e7eb' : '#636363'),
+                                            borderWidth: (mfaCodeStatus === 'error' || mfaCodeStatus === 'success') ? '2px' : '1px'
+                                        }}
+                                        type="text"
+                                        maxLength={1}
+                                        inputMode="numeric"
+                                        value={digit}
+                                        onChange={(e) => {
+                                            if (/^[0-9]?$/.test(e.target.value)) {
+                                                if (error) setError(null);
+                                                setMfaCodeStatus('normal');
+
+                                                const newCode = [...mfaCode];
+                                                newCode[index] = e.target.value;
+                                                setMfaCode(newCode);
+                                                if (e.target.value && index < 5) {
+                                                    mfaInputRefs.current[index + 1]?.focus();
+                                                }
+                                                if (e.target.value && index === 5 && newCode.every(digit => digit)) {
+                                                    handleUnlinkMfaCode(newCode.join(''));
+                                                }
+                                            }
+                                        }}
+                                        onFocus={() => setFocusedInput(`mfa-unlink-code-${index}`)}
+                                        onBlur={() => setFocusedInput(null)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Backspace' && !mfaCode[index] && index > 0) {
+                                                mfaInputRefs.current[index - 1]?.focus();
+                                            }
+                                        }}
+                                        disabled={loading}
+                                    />
+                                ))}
+                            </div>
+                            
+                            <div style={{ marginTop: 20, height: 24, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                {loading ? (
+                                    <div style={{ width: 20, height: 20, border: '2px solid #f3f3f3', borderTop: '2px solid #dc3545', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                ) : error ? (
+                                    <div style={{ color: '#dc3545', fontSize: 14, fontWeight: 500 }}>{error}</div>
+                                ) : null}
                             </div>
                         </div>
                     )}

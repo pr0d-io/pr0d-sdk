@@ -10,4 +10,7 @@ export default defineConfig({
             'pr0d-sdk': path.resolve(__dirname, '../src'),
         },
     },
+    server: {
+        allowedHosts: ['test.pr0d.io'],
+    },
 });

@@ -9,6 +9,7 @@ import { useThrottledCallback } from './useThrottleCallback';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AuthPopup from './views/AuthPopup';
 import * as api from './api/apis';
+import LoadingSpinner from './components/LoadingSpinner';
 
 const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiConfig, children }: { appConfig: AppConfig | null, visitorId: string | null, wagmiConfig: Config, children: React.ReactNode }) => {
 
@@ -39,7 +40,6 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
         checkAuthenticationTokens();
     }, []);
 
-    // Check for recent connector id from localStorage
     useEffect(() => {
         try {
             const storedRecentConnectorId = localStorage.getItem('wagmi.recentConnectorId');
@@ -110,7 +110,6 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
         }
 
         if (success && code) {
-            // For generic OAuth callback, show loading and exchange
             setPopup({ show: true, view: 'oauth-loading' });
             exchangeCodeForToken(code);
         } else if (!success && error) {
@@ -238,11 +237,8 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
             
             await handleLoginSuccess(access_token, refresh_token);
             
-            // Close popup after success
-            setTimeout(() => {
-                setCurrentProvider(null);
-                closePopup();
-            }, 1000);
+            setCurrentProvider(null);
+            closePopup();
         } catch (err: any) {
             // Show error popup with specific error message
             setCurrentProvider(null);
@@ -255,8 +251,8 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
         }
     };
 
-    const sendEmailCode = async (email: string) => {
-        return api.sendEmailCode(email);
+    const sendEmailCode = async (email: string, forceNewCode: boolean = false) => {
+        return api.sendEmailCode(email, forceNewCode);
     };
 
     const loginWithEmail = async (email: string, code: string) => {
@@ -477,10 +473,7 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
             
             await handleLoginSuccess(access_token, refresh_token);
             
-            // Close popup after success
-            setTimeout(() => {
-                closePopup();
-            }, 1000);
+            closePopup();
         } catch (err: any) {
             console.error('[Passkey Login Error]', err);
             setPopup({ show: true, view: 'passkey-error' });
@@ -626,7 +619,6 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
             
             // Show wallet success view briefly
             setPopup({ show: true, view: 'wallet-success' });
-            await new Promise(resolve => setTimeout(resolve, 1000));
             
             // Show signing view
             setPopup({ show: true, view: 'wallet-signing' });
@@ -646,10 +638,7 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
             
             await handleLoginSuccess(access_token, refresh_token);
             
-            // Close popup after success
-            setTimeout(() => {
-                closePopup();
-            }, 1000);
+            closePopup();
 
             if (error) {
                 console.error('Connect error:', error);
@@ -768,7 +757,6 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
             
             // Show wallet success view briefly
             setPopup({ show: true, view: 'wallet-success' });
-            await new Promise(resolve => setTimeout(resolve, 1000));
             
             // Show signing view
             setPopup({ show: true, view: 'wallet-signing' });
@@ -787,14 +775,11 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
             // Show login success view
             setPopup({ show: true, view: 'wallet-login-success' });
             
-            // Close popup after success
-            setTimeout(() => {
-                closePopup();
-            }, 1000);
+            closePopup();
 
             if (error) {
                 console.error('Connect error:', error);
-            }
+            }   
         } catch (err: any) {
             console.error('Link wallet error:', err);
             
@@ -865,8 +850,8 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
         return { secret };
     };
 
-    const unlinkTOTP = async () => {
-        await api.deleteMFA();
+    const unlinkTOTP = async (code: string) => {
+        await api.deleteMFA(code);
         await updateUser();
     }
 
@@ -965,6 +950,10 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
         setPopup({ show: true, view: 'mfa-passkey' });
     };
 
+    const triggerTotpDisable = () => {
+        setPopup({ show: true, view: 'mfa-totp-disable' });
+    };
+
     const linkMFA = async () => {
         setPopup({ show: true, view: 'mfa' });
     };
@@ -1037,6 +1026,7 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
         triggerPasskeySetup,
         triggerTotpSetup,
         triggerPasskeySetupDirect,
+        triggerTotpDisable,
         triggerEmailLink,
         triggerProviderLink,
         triggerWalletLink,
@@ -1140,8 +1130,7 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
         linkMFA,
     ]);
 
-    if (!ready) return <div>Loading...</div>;
-
+    if (!ready) return <LoadingSpinner message="Loading..." />;
 
     return (
         <Pr0dContext.Provider value={contextValue}>
@@ -1184,7 +1173,7 @@ const Pr0dProvider = ({ appId, children }: { appId: string, children: React.Reac
         fetchVisitorId();
     }, []);
 
-    if (!appConfig || !wagmiConfig) return <div>Loading...</div>;
+    if (!appConfig || !wagmiConfig) return <LoadingSpinner message="Loading..." />;
     return (
         <QueryClientProvider client={queryClient}>
             <WagmiProvider config={wagmiConfig}>

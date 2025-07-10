@@ -8,9 +8,10 @@ const getAppConfig = async (appId: string) => {
 
 // EMAIL \\
 
-const sendEmailCode = async (email: string) => {
+const sendEmailCode = async (email: string, forceNewCode: boolean = false) => {
     const response = await apiClient.post("/email/init", {
-        email
+        email,
+        forceNewCode
     })
     return response.data.data   
 }
@@ -84,8 +85,12 @@ const linkTOTPWithCode = async (code: string) => {
     return response.data.data
 }
 
-const deleteMFA = async () => {
-    const response = await apiClient.delete("/mfa/delete")
+const deleteMFA = async (code: string) => {
+    const response = await apiClient.delete("/mfa/delete", {
+        data: {
+            code
+        }
+    })
     return response.data.data
 }
 

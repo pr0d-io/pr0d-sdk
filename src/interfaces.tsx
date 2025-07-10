@@ -51,7 +51,7 @@ export interface AuthContextType {
         withX: () => Promise<void>;
         withPasskey: () => Promise<void>;
         withWallet: (connector?: any) => Promise<void>;
-        sendEmailCode: (email: string) => Promise<any>;
+        sendEmailCode: (email: string, forceNewCode: boolean) => Promise<any>;
     },
     link: {
         totp: (code: string) => Promise<void>;
@@ -62,10 +62,10 @@ export interface AuthContextType {
         wallet: (connector?: any) => Promise<void>;
         passkey: () => Promise<void>;
         email: (email: string, code: string) => Promise<void>;
-        sendEmailCode: (email: string) => Promise<any>;
+        sendEmailCode: (email: string, forceNewCode: boolean) => Promise<any>;
     },
     unlink: {
-        totp: () => Promise<void>;
+        totp: (code: string) => Promise<void>;
         google: () => Promise<void>;
         discord: () => Promise<void>;
         github: () => Promise<void>;
@@ -85,6 +85,7 @@ export interface AuthContextType {
     triggerEmailLink: () => void;
     triggerProviderLink: () => void;
     triggerWalletLink: () => void;
+    triggerTotpDisable: () => void;
     linkMFA: () => Promise<void>;
     helpers: {
         isPasskeySupported: boolean;
