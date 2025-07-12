@@ -12,7 +12,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "postpublish": "node scripts/notify-backend.js"
   },
   "peerDependencies": {
     "@rainbow-me/rainbowkit": "^2.0.0",
