@@ -4,7 +4,25 @@ import axios from 'axios';
 
 let appId: string | null = null;
 let visitorId: string | null = null;
-let accessTokenOverride: string | null = null;
+
+// Add refresh token lock to prevent race conditions
+let isRefreshing = false;
+let failedQueue: Array<{
+    resolve: (value?: any) => void;
+    reject: (error?: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+    failedQueue.forEach(({ resolve, reject }) => {
+        if (error) {
+            reject(error);
+        } else {
+            resolve(token);
+        }
+    });
+    
+    failedQueue = [];
+};
 
 export const setApiContext = ({
     _appId,
@@ -17,13 +35,15 @@ export const setApiContext = ({
 }) => {
     if (_appId !== undefined) appId = _appId;
     if (_visitorId !== undefined) visitorId = _visitorId;
-    if (_accessToken !== undefined) accessTokenOverride = _accessToken;
+    if (_accessToken !== undefined && _accessToken !== null) {
+        localStorage.setItem('pr0d:access_token', _accessToken);
+    }
 };
 
 export const getApiContext = () => ({
     appId,
     visitorId,
-    accessToken: accessTokenOverride || localStorage.getItem('pr0d:access_token'),
+    accessToken: localStorage.getItem('pr0d:access_token'),
 });
 
 const apiClient = axios.create({
@@ -33,7 +53,7 @@ const apiClient = axios.create({
 
 // 🔐 Request Interceptor
 apiClient.interceptors.request.use((config) => {
-    const token = accessTokenOverride || localStorage.getItem('pr0d:access_token');
+    const token = localStorage.getItem('pr0d:access_token');
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
@@ -46,7 +66,6 @@ apiClient.interceptors.request.use((config) => {
     return config;
 });
 
-// 🔄 Response Interceptor (401 token refresh logic)
 apiClient.interceptors.response.use(
     (response) => response,
     async (error) => {
@@ -55,25 +74,56 @@ apiClient.interceptors.response.use(
         if (
             error.response?.status === 401 &&
             !originalRequest._retry &&
-            error.response.config.url?.includes('auth.pr0d.io')
+            (error.response.config.url?.includes('auth.pr0d.io') ||
+                error.response.config.baseURL?.includes('auth.pr0d.io'))
         ) {
+            if (originalRequest.url?.includes('/sessions/refresh')) {
+                return Promise.reject(error);
+            }
+
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                }).then((token) => {
+                    originalRequest.headers['Authorization'] = `Bearer ${token}`;
+                    return apiClient(originalRequest);
+                }).catch((err) => {
+                    return Promise.reject(err);
+                });
+            }
+
             originalRequest._retry = true;
+            isRefreshing = true;
 
             const refreshToken = localStorage.getItem('pr0d:refresh_token');
+            
             if (refreshToken) {
                 try {
                     const refreshResponse = await axios.post(
                         'https://auth.pr0d.io/api/sessions/refresh',
-                        { refresh_token: refreshToken }
+                        { refresh_token: refreshToken },
+                        {
+                            headers: {
+                                'pr0d-app-id': appId,
+                                'pr0d-visitor-id': visitorId,
+                            }
+                        }
                     );
 
-                    const newAccessToken = refreshResponse.data.access_token;
+                    const newAccessToken = refreshResponse.data.data.access_token;
+                    const newRefreshToken = refreshResponse.data.data.refresh_token;
                     localStorage.setItem('pr0d:access_token', newAccessToken);
-                    accessTokenOverride = newAccessToken;
+                    localStorage.setItem('pr0d:refresh_token', newRefreshToken);
+
+                    // Process queued requests with new token
+                    processQueue(null, newAccessToken);
 
                     originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
                     return apiClient(originalRequest);
                 } catch (refreshError) {
+                    // Process queued requests with error
+                    processQueue(refreshError, null);
+                    
                     localStorage.removeItem('pr0d:access_token');
                     localStorage.removeItem('pr0d:refresh_token');
 
@@ -82,8 +132,11 @@ apiClient.interceptors.response.use(
                     }
 
                     return Promise.reject(refreshError);
+                } finally {
+                    isRefreshing = false;
                 }
             } else {
+                isRefreshing = false;
                 if (typeof window !== 'undefined') {
                     window.location.href = '/login';
                 }

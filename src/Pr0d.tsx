@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AppConfig, User } from './interfaces';
 import { Pr0dContext } from './context';
 import { WagmiProvider, type Config, useSignMessage, useSignTypedData, useConnect, useAccount, useDisconnect } from 'wagmi';
@@ -9,6 +9,7 @@ import { useThrottledCallback } from './useThrottleCallback';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AuthPopup from './views/AuthPopup';
 import * as api from './api/apis';
+
 import LoadingSpinner from './components/LoadingSpinner';
 
 const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiConfig, children }: { appConfig: AppConfig | null, visitorId: string | null, wagmiConfig: Config, children: React.ReactNode }) => {
@@ -33,10 +34,14 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
     const [recentConnectorId, setRecentConnectorId] = useState<string | null>(null);
     const [oauthError, setOauthError] = useState<{ provider: string; state: string; errorMessage: string | null } | null>(null);
     const [isWalletLinkingMode, setIsWalletLinkingMode] = useState(false);
+    const authCheckRef = useRef(false);
     const visitorId = initialVisitorId;
 
     useEffect(() => {
         disconnect();
+    }, []);
+
+    useEffect(() => {
         checkAuthenticationTokens();
     }, []);
 
@@ -119,9 +124,17 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
     }, []);
 
     const checkAuthenticationTokens = async () => {
+        // Prevent multiple simultaneous executions using ref
+        if (authCheckRef.current) {
+            return;
+        }
+        
+        authCheckRef.current = true;
+        
         try {
             const accessToken = getAccessToken();
             const refreshToken = getRefreshToken();
+
             if (accessToken && !isTokenExpired(accessToken)) {
                 setIsAuthenticated(true);
                 setAccessToken(accessToken);
@@ -131,11 +144,19 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
             }
 
             if (refreshToken) {
-                const data = await api.refreshSessionByRefreshToken(refreshToken);
-                if (data.success && data.access_token && data.refresh_token) {
-                    await handleLoginSuccess(data.access_token, data.refresh_token);
-                    return;
+                try {
+                    const data = await api.refreshSessionByRefreshToken(refreshToken);
+                    if (data.access_token && data.refresh_token) {
+                        await handleLoginSuccess(data.access_token, data.refresh_token);
+                        return;
+                    } else {
+                        console.log('refresh failed - no valid tokens in response');
+                    }
+                } catch (refreshError) {
+                    console.log('refresh error:', refreshError);
                 }
+            } else {
+                console.log('no refresh token available');
             }
 
             throw new Error('No valid tokens');
@@ -146,6 +167,7 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
             setIsAuthenticated(false);
         } finally {
             setReady(true);
+            authCheckRef.current = false;
         }
     };
 
