@@ -149,7 +149,7 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
         }
     };
 
-    const logout = useCallback(() => {
+    const logout = () => {
         if (refreshToken) {
             api.revokeSessionByRefreshToken(refreshToken);
         }
@@ -158,7 +158,7 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
         setAccessToken(null);
         setRefreshToken(null);
         setUser(null);
-    }, [refreshToken]);
+    };
 
     const refreshSession = useCallback(async () => {
         try {
@@ -231,12 +231,14 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
             }
             
             const { access_token, refresh_token } = await api.exchangeCodeForTokens(code);
+
+            if(access_token && refresh_token) {
+                await handleLoginSuccess(access_token, refresh_token);
+            }
             
             // Show success view briefly
             setPopup({ show: true, view: 'oauth-success' });
-            
-            await handleLoginSuccess(access_token, refresh_token);
-            
+                        
             setCurrentProvider(null);
             closePopup();
         } catch (err: any) {
