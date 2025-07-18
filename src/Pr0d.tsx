@@ -655,7 +655,7 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
             // Show verification view while submitting signature
             setPopup({ show: true, view: 'wallet-verifying' });
             
-            const { access_token, refresh_token } = await api.authenticateWallet(signature, message.nonce);
+            const { access_token, refresh_token } = await api.authenticateWallet(signature, message.nonce, connectorToUse.name);
             
             // Show login success view
             setPopup({ show: true, view: 'wallet-login-success' });
@@ -794,7 +794,7 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
             // Show verification view while submitting signature
             setPopup({ show: true, view: 'wallet-verifying' });
             
-            await api.linkWallet(signature, message.nonce);
+            await api.linkWallet(signature, message.nonce, connectorToUse.name);
             await updateUser();
             // Show login success view
             setPopup({ show: true, view: 'wallet-login-success' });
