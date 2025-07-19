@@ -3,7 +3,7 @@ import { AppConfig, User } from './interfaces';
 import { Pr0dContext } from './context';
 import { WagmiProvider, type Config, useSignMessage, useSignTypedData, useConnect, useAccount, useDisconnect } from 'wagmi';
 import { formatPasskeyOptions, getWagmiConfig, isTokenExpired, bufferToBase64Url, constructSiveMessage, getTotpUrl, getConnectors } from './helpers';
-import { setApiContext } from './api/apiClient';
+import { setApiContext, setTokenRefreshCallback } from './api/apiClient';
 import { getAccessToken, getRefreshToken, storeTokens, clearTokens } from './tokenStorage';
 import { useThrottledCallback } from './useThrottleCallback';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -89,6 +89,15 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
         });
     }, [appConfig, visitorId, accessToken]);
 
+    // Set up token refresh callback to keep component state in sync
+    useEffect(() => {
+        setTokenRefreshCallback((newAccessToken: string, newRefreshToken: string) => {
+            console.log('[Token Refresh] Updating component state with new tokens');
+            setAccessToken(newAccessToken);
+            setRefreshToken(newRefreshToken);
+        });
+    }, []);
+
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
 
@@ -147,7 +156,12 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
                 try {
                     const data = await api.refreshSessionByRefreshToken(refreshToken);
                     if (data.access_token && data.refresh_token) {
-                        await handleLoginSuccess(data.access_token, data.refresh_token);
+                        // Update tokens directly without calling handleLoginSuccess to avoid conflicts
+                        storeTokens(data.access_token, data.refresh_token);
+                        setAccessToken(data.access_token);
+                        setRefreshToken(data.refresh_token);
+                        setIsAuthenticated(true);
+                        await updateUser();
                         return;
                     } else {
                         console.log('refresh failed - no valid tokens in response');
@@ -188,7 +202,12 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
             if (!refreshToken) throw new Error('Missing refresh token');
 
             const { access_token, refresh_token } = await api.refreshSessionByRefreshToken(refreshToken);
-            await handleLoginSuccess(access_token, refresh_token);
+            
+            // Update tokens directly without calling handleLoginSuccess to avoid conflicts
+            storeTokens(access_token, refresh_token);
+            setAccessToken(access_token);
+            setRefreshToken(refresh_token);
+            setIsAuthenticated(true);
         } catch (err) {
             logout();
         }

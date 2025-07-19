@@ -12,6 +12,9 @@ let failedQueue: Array<{
     reject: (error?: any) => void;
 }> = [];
 
+// Add callback for token refresh notifications
+let onTokenRefresh: ((accessToken: string, refreshToken: string) => void) | null = null;
+
 const processQueue = (error: any, token: string | null = null) => {
     failedQueue.forEach(({ resolve, reject }) => {
         if (error) {
@@ -36,8 +39,14 @@ export const setApiContext = ({
     if (_appId !== undefined) appId = _appId;
     if (_visitorId !== undefined) visitorId = _visitorId;
     if (_accessToken !== undefined && _accessToken !== null) {
+        console.log('[API Context] Setting access token:', _accessToken.substring(0, 10) + '...');
         localStorage.setItem('pr0d:access_token', _accessToken);
     }
+};
+
+// Add function to set token refresh callback
+export const setTokenRefreshCallback = (callback: (accessToken: string, refreshToken: string) => void) => {
+    onTokenRefresh = callback;
 };
 
 export const getApiContext = () => ({
@@ -55,6 +64,7 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use((config) => {
     const token = localStorage.getItem('pr0d:access_token');
     if (token) {
+        console.log('[API Request] Using token:', token.substring(0, 10) + '...', 'for URL:', config.url);
         config.headers.Authorization = `Bearer ${token}`;
     }
     if (appId) {
@@ -114,6 +124,12 @@ apiClient.interceptors.response.use(
                     const newRefreshToken = refreshResponse.data.data.refresh_token;
                     localStorage.setItem('pr0d:access_token', newAccessToken);
                     localStorage.setItem('pr0d:refresh_token', newRefreshToken);
+
+                    // Notify component about token refresh
+                    if (onTokenRefresh) {
+                        console.log('[API Client] Token refreshed, notifying component');
+                        onTokenRefresh(newAccessToken, newRefreshToken);
+                    }
 
                     // Process queued requests with new token
                     processQueue(null, newAccessToken);
