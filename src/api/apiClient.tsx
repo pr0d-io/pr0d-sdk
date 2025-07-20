@@ -143,7 +143,7 @@ apiClient.interceptors.response.use(
                     localStorage.removeItem('pr0d:access_token');
                     localStorage.removeItem('pr0d:refresh_token');
 
-                    if (typeof window !== 'undefined') {
+                    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
                         window.location.href = '/login';
                     }
 
@@ -153,7 +153,7 @@ apiClient.interceptors.response.use(
                 }
             } else {
                 isRefreshing = false;
-                if (typeof window !== 'undefined') {
+                if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
                     window.location.href = '/login';
                 }
             }

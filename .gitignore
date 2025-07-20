@@ -6,6 +6,7 @@
 .pnp.js
 /scripts
 .github
+demo/node_modules
 # testing
 /coverage
 

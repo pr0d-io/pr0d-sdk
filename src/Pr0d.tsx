@@ -168,6 +168,7 @@ const Pr0d = ({ appConfig: initialAppConfig, visitorId: initialVisitorId, wagmiC
                     }
                 } catch (refreshError) {
                     console.log('refresh error:', refreshError);
+                    logout();
                 }
             } else {
                 console.log('no refresh token available');
