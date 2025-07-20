@@ -1,6 +1,6 @@
 {
   "name": "pr0d-sdk",
-  "version": "1.0.33",
+  "version": "1.0.34",
   "type": "module",
   "description": "Authentication SDK for email, social, passkeys, and wallets.",
   "main": "dist/pr0d-sdk.cjs.js",
